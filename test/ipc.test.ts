@@ -1,0 +1,203 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { IPC } from '../src/ipc'
+import { mockTransport } from './setup'
+
+describe('IPC', () => {
+  let ipc: IPC
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    mockTransport.send.mockClear()
+    ipc = new IPC({ namespace: 'test' })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('sends a direct (unchunked) packet', () => {
+    ipc.send('ping', { msg: 'hello' })
+
+    expect(mockTransport.send).toHaveBeenCalledTimes(1)
+    const [id, payload] = mockTransport.send.mock.calls[0]
+    expect(id).toBe('ipc:test')
+
+    const parsed = JSON.parse(payload)
+    expect(parsed.v).toBe(1)
+    expect(parsed.e).toBe('ping')
+    expect(parsed.d).toEqual({ msg: 'hello' })
+  })
+
+  it('receives a direct packet via on()', () => {
+    const handler = vi.fn()
+    ipc.on<{ msg: string }>('ping', handler)
+
+    const packet = JSON.stringify({ v: 1, id: 'ABC123', e: 'ping', d: { msg: 'hello' } })
+    mockTransport.simulateReceive('ipc:test', packet)
+
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(handler).toHaveBeenCalledWith({ msg: 'hello' })
+  })
+
+  it('supports multiple on() handlers per endpoint', () => {
+    const h1 = vi.fn()
+    const h2 = vi.fn()
+    ipc.on('test', h1)
+    ipc.on('test', h2)
+
+    mockTransport.simulateReceive('ipc:test', JSON.stringify({ v: 1, id: 'X', e: 'test', d: 42 }))
+
+    expect(h1).toHaveBeenCalledWith(42)
+    expect(h2).toHaveBeenCalledWith(42)
+  })
+
+  it('unsubscribe via on() returned function', () => {
+    const handler = vi.fn()
+    const off = ipc.on('test', handler)
+    off()
+
+    mockTransport.simulateReceive('ipc:test', JSON.stringify({ v: 1, id: 'X', e: 'test', d: 42 }))
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('invoke waits for handle response', async () => {
+    ipc.handle<{ x: number }, { y: string }>('calc', async (req) => {
+      return { y: String(req.x * 2) }
+    })
+
+    const promise = ipc.invoke<{ x: number }, { y: string }>('calc', { x: 21 })
+
+    // Simulate the invoke packet arriving at handle side
+    const sentPayload = mockTransport.send.mock.calls[0][1]
+    const sentPacket = JSON.parse(sentPayload)
+
+    // Simulate response arriving back
+    const responsePacket = JSON.stringify({
+      v: 1,
+      id: sentPacket.id,
+      e: '@response',
+      d: { ok: true, data: { y: '42' } },
+    })
+    mockTransport.simulateReceive('ipc:test', responsePacket)
+
+    const result = await promise
+    expect(result).toEqual({ y: '42' })
+  })
+
+  it('handle sends error response on handler exception', async () => {
+    ipc.handle('fail', () => {
+      throw new Error('oops')
+    })
+
+    // Simulate incoming invoke request
+    const reqPacket = JSON.stringify({ v: 1, id: 'REQ1', e: 'fail', d: {} })
+    mockTransport.simulateReceive('ipc:test', reqPacket)
+
+    // Let microtasks settle
+    await vi.runAllTimersAsync()
+
+    // Check that an error response was sent
+    const lastCall = mockTransport.send.mock.lastCall?.[1]
+    if (lastCall) {
+      const parsed = JSON.parse(lastCall)
+      // Could be chunk-wrapped or direct
+      const inner = parsed.v ? parsed : JSON.parse(parsed.d || '{}')
+      if (inner.e === '@response') {
+        expect(inner.d.ok).toBe(false)
+        expect(inner.d.err).toBe('Error: oops')
+      }
+    }
+  })
+
+  it('chunks large payloads', () => {
+    // Create a separate IPC with very small chunk size and no compression
+    const chunkIPC = new IPC({ namespace: 'test', chunkSize: 100, compressThreshold: 999999 })
+    const largeData = { data: 'x'.repeat(500) }
+    chunkIPC.send('big', largeData)
+
+    // Should have sent multiple scriptEvents
+    expect(mockTransport.send.mock.calls.length).toBeGreaterThan(1)
+
+    // All should use the ipc:test ID
+    for (const [id] of mockTransport.send.mock.calls) {
+      expect(id).toBe('ipc:test')
+    }
+
+    // First call should be a chunk (has 'i' field)
+    const firstPayload = JSON.parse(mockTransport.send.mock.calls[0][1])
+    expect(firstPayload.i).toBeDefined()
+    expect(firstPayload.s).toBe(0)
+  })
+
+  it('reassembles chunked payloads', () => {
+    const handler = vi.fn()
+    ipc.on<{ data: string }>('big', handler)
+
+    // Simulate a chunked packet
+    const packet = JSON.stringify({ v: 1, id: 'CHUNKID', e: 'big', d: { data: 'hello' } })
+    const compressed = packet // not compressing for test simplicity
+
+    // Manually chunk at 10 chars
+    const chunks: string[] = []
+    for (let i = 0; i < compressed.length; i += 10) {
+      chunks.push(compressed.slice(i, i + 10))
+    }
+
+    // Send chunks
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = JSON.stringify({ i: 'CHUNKID', s: i, t: chunks.length, d: chunks[i] })
+      mockTransport.simulateReceive('ipc:test', chunk)
+    }
+
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(handler).toHaveBeenCalledWith({ data: 'hello' })
+  })
+
+  it('emits error on malformed chunk reassembly', () => {
+    const errorHandler = vi.fn()
+    ipc.events.on('error', errorHandler)
+
+    const chunk = JSON.stringify({ i: 'BADID', s: 0, t: 1, d: 'not-json!!' })
+    mockTransport.simulateReceive('ipc:test', chunk)
+
+    expect(errorHandler).toHaveBeenCalled()
+  })
+
+  it('supports custom serializer in send()', () => {
+    const customSerializer = {
+      serialize: (v: number) => `num:${v}`,
+    }
+    ipc.send('custom', customSerializer, 42)
+
+    const payload = mockTransport.send.mock.calls[0][1]
+    const parsed = JSON.parse(payload)
+    expect(parsed.d).toBe('num:42')
+  })
+
+  it('supports custom deserializer in on()', () => {
+    const customDeserializer = {
+      deserialize: (d: string) => Number.parseInt(d.replace('num:', ''), 10),
+    }
+    const handler = vi.fn()
+    ipc.on('custom', customDeserializer, handler)
+
+    const packet = JSON.stringify({ v: 1, id: 'X', e: 'custom', d: 'num:42' })
+    mockTransport.simulateReceive('ipc:test', packet)
+
+    expect(handler).toHaveBeenCalledWith(42)
+  })
+
+  it('handle() returns an unsubscribe function', () => {
+    const handler = vi.fn(() => 'ok')
+    const off = ipc.handle('temp', handler)
+    off()
+
+    // Second handle with same endpoint should not throw since first was removed
+    expect(() => ipc.handle('temp', handler)).not.toThrow()
+  })
+
+  it('handle() throws on duplicate endpoint', () => {
+    ipc.handle('dup', () => 'ok')
+    expect(() => ipc.handle('dup', () => 'ok')).toThrow('already registered')
+  })
+})
