@@ -1,5 +1,4 @@
 catalogMode: prefer
-
 ignoreWorkspaceRootCheck: true
 shellEmulator: true
 trustPolicy: no-downgrade
@@ -19,7 +18,7 @@ catalogs:
     typescript: ^6.0.3
     vite: ^8.0.9
   deps:
-    '@mcbe-mods/utils': ^0.1.1
+    '@mcbe-mods/utils': ^0.1.2
     lz-string: ^1.5.0
     mini-emit: 1.0.0-beta.0
   inlined:

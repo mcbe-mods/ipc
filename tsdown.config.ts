@@ -15,6 +15,7 @@ export default defineConfig({
     alwaysBundle: [
       'mini-emit',
       'lz-string',
+      '@mcbe-mods/utils',
     ],
     neverBundle: [
       '@minecraft/server',
