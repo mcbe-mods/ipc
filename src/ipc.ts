@@ -248,16 +248,13 @@ export class IPC {
 
     const handleHandler = this.#handleHandlers.get(endpoint)
     if (handleHandler) {
-      Promise.resolve()
-        .then(() => handleHandler(data))
-        .then(
-          (result) => {
-            this.sendResponse(id, { ok: true, data: result })
-          },
-          (err) => {
-            this.sendResponse(id, { ok: false, err: String(err) })
-          },
-        )
+      Promise.resolve(handleHandler(data))
+        .then((result) => {
+          this.sendResponse(id, { ok: true, data: result })
+        })
+        .catch((err) => {
+          this.sendResponse(id, { ok: false, err: String(err) })
+        })
       return
     }
 
