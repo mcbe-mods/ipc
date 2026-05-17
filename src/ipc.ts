@@ -43,7 +43,7 @@ export class IPC {
   readonly #onHandlers = new Map<string, Set<(data: unknown) => void>>()
   readonly #handleHandlers = new Map<string, (data: unknown) => unknown | Promise<unknown>>()
   readonly #responses = new EventEmitter<Record<string, unknown>>()
-  readonly #sentIds = new Set<string>()
+  readonly #sentIds = new Set<string>() // IDs sent by this instance — used to detect loopback and prevent false "No handler" errors
 
   readonly events = new EventEmitter<IPCSystemEvents>()
 
@@ -63,6 +63,7 @@ export class IPC {
     })
   }
 
+  // Fire-and-forget: send data to an endpoint without expecting a response
   send<T>(endpoint: string, data: NoInfer<T>): void
   send<T>(endpoint: string, serializer: Serializer<T>, data: NoInfer<T>): void
   send<T>(endpoint: string, serializerOrData: Serializer<T> | T, data?: T): void {
@@ -74,6 +75,7 @@ export class IPC {
     this.sendPacket(packet)
   }
 
+  // Register a listener for fire-and-forget messages on an endpoint
   on<T>(endpoint: string, handler: (data: T) => void): () => void
   on<T>(endpoint: string, deserializer: Deserializer<T>, handler: (data: T) => void): () => void
   on<T>(
@@ -114,6 +116,7 @@ export class IPC {
     }
   }
 
+  // Request-response: invoke a handler on the other side and await its return value
   invoke<T = unknown, R = unknown>(endpoint: string, data: T): Promise<R>
   invoke<T = unknown, R = unknown>(
     endpoint: string,
@@ -141,6 +144,7 @@ export class IPC {
     return this.invokeImpl(endpoint, value, serializer, deserializer)
   }
 
+  // Register a responder for an endpoint — must be paired with invoke() on the other side
   handle<T, R>(
     endpoint: string,
     handler: (data: T) => R | Promise<R>,
@@ -223,11 +227,13 @@ export class IPC {
   private handleDirectPacket(packet: Packet): void {
     const { e: endpoint, d: data, id } = packet
 
+    // Response from an invoke — resolve/reject the pending promise by id
     if (endpoint === RESPONSE_ENDPOINT) {
       this.#responses.emit(`resp:${id}`, data)
       return
     }
 
+    // Handle request — execute the registered responder and send back the result
     const handleHandler = this.#handleHandlers.get(endpoint)
     if (handleHandler) {
       Promise.resolve()
@@ -241,6 +247,7 @@ export class IPC {
       return
     }
 
+    // Fire-and-forget — forward to all on() listeners
     const onHandlers = this.#onHandlers.get(endpoint)
     if (onHandlers) {
       for (const handler of onHandlers) {
@@ -249,11 +256,13 @@ export class IPC {
       return
     }
 
+    // Packet was sent by this instance itself (loopback via ScriptEvent) — ignore quietly
     if (this.#sentIds.has(id)) {
       this.#sentIds.delete(id)
       return
     }
 
+    // No handler registered — notify the caller so invoke() doesn't hang
     this.sendResponse(id, { ok: false, err: `No handler registered for "${endpoint}"` })
   }
 

@@ -15,20 +15,21 @@ export interface IPCOptions {
 }
 
 export interface Packet<T = unknown> {
-  v: 1
-  id: string
-  e: string
-  d: T
+  v: 1 // protocol version
+  id: string // unique request id for response matching
+  e: string // endpoint name
+  d: T // payload
 }
 
 export interface Chunk {
-  i: string
-  s: number
-  t: number
-  c?: 1
-  d: string
+  i: string // packet id
+  s: number // sequence index
+  t: number // total chunks
+  c?: 1 // compressed flag
+  d: string // data slice (raw segment or lz-string compressed segment)
 }
 
+// Discriminated by ok — ok:true carries data, ok:false carries err
 export interface ResponseData<T = unknown> {
   ok: true
   data: T
