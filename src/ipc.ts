@@ -22,6 +22,11 @@ const DEFAULT_OPTIONS: Required<IPCOptions> = {
   maxPacketSize: 1_000_000,
 }
 
+/**
+ * Events emitted by {@link IPC.events}.
+ * - `error`: An internal error occurred (e.g., malformed chunk reassembly).
+ * - `chunk:timeout`: A chunked packet timed out waiting for remaining fragments.
+ */
 export interface IPCSystemEvents {
   'error': Error
   'chunk:timeout': { id: string }
@@ -47,6 +52,11 @@ export class IPC {
 
   readonly events = new EventEmitter<IPCSystemEvents>()
 
+  /**
+   * Creates an IPC instance bound to the given namespace.
+   * All addons that create an IPC with the same namespace can communicate.
+   * @param options - Configuration options (see {@link IPCOptions})
+   */
   constructor(options: IPCOptions = {}) {
     this.#options = { ...DEFAULT_OPTIONS, ...options }
     this.#transport = new Transport(this.#options.namespace)
@@ -63,7 +73,20 @@ export class IPC {
     })
   }
 
-  // Fire-and-forget: send data to an endpoint without expecting a response
+  /**
+   * Fire-and-forget: send data to an endpoint without expecting a response.
+   * Use {@link on} on the receiving side to listen for these messages.
+   * @param endpoint - The endpoint name
+   * @param data - The data to send. If using a custom serializer, this is the typed value.
+   * @example
+   * ```ts
+   * ipc.send('notify', { message: 'hello' })
+   * ```
+   * @example
+   * ```ts
+   * ipc.send('notify', mySerializer, { message: 'hello' })
+   * ```
+   */
   send<T>(endpoint: string, data: NoInfer<T>): void
   send<T>(endpoint: string, serializer: Serializer<T>, data: NoInfer<T>): void
   send<T>(endpoint: string, serializerOrData: Serializer<T> | T, data?: T): void {
@@ -75,7 +98,27 @@ export class IPC {
     this.#sendPacket(packet)
   }
 
-  // Register a listener for fire-and-forget messages on an endpoint
+  /**
+   * Register a listener for fire-and-forget messages on an endpoint.
+   * Paired with {@link send} on the other side.
+   * Returns an unsubscribe function.
+   * @param endpoint - The endpoint name to listen on
+   * @param handler - Called with the deserialized data each time a message arrives
+   * @returns A function that unsubscribes this listener
+   * @example
+   * ```ts
+   * const off = ipc.on<string>('chat', (msg) => {
+   *   console.log(msg)
+   * })
+   * // later: off()
+   * ```
+   * @example
+   * ```ts
+   * ipc.on('data', myDeserializer, (data) => {
+   *   console.log(data)
+   * })
+   * ```
+   */
   on<T>(endpoint: string, handler: (data: T) => void): () => void
   on<T>(endpoint: string, deserializer: Deserializer<T>, handler: (data: T) => void): () => void
   on<T>(
@@ -116,7 +159,23 @@ export class IPC {
     }
   }
 
-  // Request-response: invoke a handler on the other side and await its return value
+  /**
+   * Sends a request to the other side and waits for the handler's response.
+   * Must be paired with {@link handle} on the receiving side.
+   * The returned promise resolves with the handler's return value or rejects if
+   * no handler is registered or the handler throws.
+   * @param endpoint - The endpoint name to invoke
+   * @param data - The data to send to the handler
+   * @returns A promise that resolves with the handler's return value
+   * @example
+   * ```ts
+   * const result = await ipc.invoke<{ x: number }, { y: string }>('calc', { x: 21 })
+   * ```
+   * @example
+   * ```ts
+   * const result = await ipc.invoke('calc', mySerializer, myDeserializer, data)
+   * ```
+   */
   invoke<T = unknown, R = unknown>(endpoint: string, data: T): Promise<R>
   invoke<T = unknown, R = unknown>(
     endpoint: string,
@@ -144,7 +203,23 @@ export class IPC {
     return this.#invokeImpl(endpoint, value, serializer, deserializer)
   }
 
-  // Register a responder for an endpoint — must be paired with invoke() on the other side
+  /**
+   * Register a responder for an endpoint.
+   * Must be paired with {@link invoke} on the other side.
+   * The handler can return a value or a Promise. Throwing will cause the invoke to reject.
+   * Only one handler can be registered per endpoint — duplicate registration throws.
+   * @param endpoint - The endpoint name to handle
+   * @param handler - Called with the deserialized data when an invoke arrives. Return a value or a Promise.
+   * @returns A function that unregisters this handler
+   * @throws {Error} If a handler is already registered for this endpoint
+   * @example
+   * ```ts
+   * const off = ipc.handle<{ x: number }, { y: string }>('calc', async (req) => {
+   *   return { y: String(req.x * 2) }
+   * })
+   * // later: off()
+   * ```
+   */
   handle<T, R>(
     endpoint: string,
     handler: (data: T) => R | Promise<R>,

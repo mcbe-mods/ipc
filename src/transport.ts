@@ -1,4 +1,8 @@
-// Wraps Minecraft's ScriptEvent system for cross-addon IPC within the same world
+/**
+ * Wraps Minecraft's ScriptEvent system to provide a simple pub/sub transport layer.
+ * All addons sharing the same namespace can exchange messages,
+ * even if they are loaded from separate behavior packs.
+ */
 import { ScriptEventSource, system } from '@minecraft/server'
 
 const IPC_NAMESPACE = 'ipc'
@@ -10,12 +14,19 @@ export class Transport {
     this.#id = `${IPC_NAMESPACE}:${namespace}`
   }
 
-  // Send a raw string payload to all addons listening on the same namespace
+  /**
+   * Broadcast a raw string payload to all addons listening on the same namespace.
+   * @param payload - The raw string to send (usually a serialized packet)
+   */
   send(payload: string): void {
     system.sendScriptEvent(this.#id, payload)
   }
 
-  // Subscribe to incoming messages from other addons
+  /**
+   * Subscribe to incoming messages from other addons.
+   * @param handler - Called with each incoming message
+   * @returns A function that unsubscribes this handler
+   */
   onReceive(handler: (payload: string) => void): () => void {
     const callback = (event: { id: string, message: string, sourceType: ScriptEventSource }): void => {
       if (event.sourceType !== ScriptEventSource.Server) {

@@ -10,16 +10,31 @@ interface PendingPacket {
   timer: ReturnType<typeof system.runTimeout>
 }
 
+/**
+ * Splits large serialized packets into smaller chunks and reassembles them on the receiving end.
+ * Used internally by {@link IPC} — you typically don't need to interact with this class directly.
+ */
 export class Chunker {
   readonly #chunkSize: number
   readonly #timeout: number
   readonly #buffer = new Map<string, PendingPacket>()
 
+  /**
+   * @param chunkSize - Maximum characters per chunk
+   * @param timeout - Timeout in ms before discarding incomplete reassemblies
+   */
   constructor(chunkSize: number, timeout: number) {
     this.#chunkSize = chunkSize
     this.#timeout = timeout
   }
 
+  /**
+   * Split a serialized string into ordered chunks for transport.
+   * @param id - A unique identifier shared by all chunks of this packet
+   * @param data - The serialized string to split
+   * @param compressed - Whether the data is compressed with lz-string
+   * @returns An array of chunks ready to be sent
+   */
   split(id: string, data: string, compressed: boolean): Chunk[] {
     const chunks: Chunk[] = []
     const total = Math.ceil(data.length / this.#chunkSize)
@@ -40,6 +55,11 @@ export class Chunker {
     return chunks
   }
 
+  /**
+   * Feed a received chunk to the reassembly buffer.
+   * Returns `{ done: true }` with the full data once all fragments have arrived.
+   * @param chunk - The incoming chunk fragment
+   */
   assemble(
     chunk: Chunk,
   ): { done: false } | { done: true, data: string, compressed: boolean } {
@@ -74,6 +94,7 @@ export class Chunker {
     return { done: false }
   }
 
+  /** Number of packets currently being reassembled */
   get pendingCount(): number {
     return this.#buffer.size
   }
