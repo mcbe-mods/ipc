@@ -55,7 +55,7 @@ export class IPC {
 
     this.#transport.onReceive((payload) => {
       try {
-        this.handleReceive(payload)
+        this.#handleReceive(payload)
       }
       catch (e) {
         this.events.emit('error', e as Error)
@@ -72,7 +72,7 @@ export class IPC {
       ? (serializerOrData as Serializer<T>).serialize(data as T)
       : (serializerOrData as T)
     const packet: Packet = { v: PROTOCOL_VERSION, id, e: endpoint, d }
-    this.sendPacket(packet)
+    this.#sendPacket(packet)
   }
 
   // Register a listener for fire-and-forget messages on an endpoint
@@ -141,7 +141,7 @@ export class IPC {
       value = serializerOrData as T
     }
 
-    return this.invokeImpl(endpoint, value, serializer, deserializer)
+    return this.#invokeImpl(endpoint, value, serializer, deserializer)
   }
 
   // Register a responder for an endpoint — must be paired with invoke() on the other side
@@ -160,7 +160,7 @@ export class IPC {
     }
   }
 
-  private invokeImpl<T, R>(
+  #invokeImpl<T, R>(
     endpoint: string,
     data: T,
     serializer?: Serializer<T>,
@@ -187,11 +187,11 @@ export class IPC {
         }
       })
 
-      this.sendPacket(packet)
+      this.#sendPacket(packet)
     })
   }
 
-  private sendPacket(packet: Packet): void {
+  #sendPacket(packet: Packet): void {
     const raw = JSON.stringify(packet)
 
     if (raw.length > this.#options.maxPacketSize) {
@@ -213,18 +213,18 @@ export class IPC {
     }
   }
 
-  private handleReceive(payload: string): void {
+  #handleReceive(payload: string): void {
     const parsed = JSON.parse(payload) as Packet | Chunk
 
     if ('v' in parsed) {
-      this.handleDirectPacket(parsed as Packet)
+      this.#handleDirectPacket(parsed as Packet)
     }
     else if ('i' in parsed) {
-      this.handleChunk(parsed as Chunk)
+      this.#handleChunk(parsed as Chunk)
     }
   }
 
-  private handleDirectPacket(packet: Packet): void {
+  #handleDirectPacket(packet: Packet): void {
     const { e: endpoint, d: data, id } = packet
 
     // Response from an invoke — resolve/reject the pending promise by id
@@ -239,10 +239,10 @@ export class IPC {
       Promise.resolve()
         .then(() => handleHandler(data))
         .then((result) => {
-          this.sendResponse(id, { ok: true, data: result })
+          this.#sendResponse(id, { ok: true, data: result })
         })
         .catch((err) => {
-          this.sendResponse(id, { ok: false, err: String(err) })
+          this.#sendResponse(id, { ok: false, err: String(err) })
         })
       return
     }
@@ -263,10 +263,10 @@ export class IPC {
     }
 
     // No handler registered — notify the caller so invoke() doesn't hang
-    this.sendResponse(id, { ok: false, err: `No handler registered for "${endpoint}"` })
+    this.#sendResponse(id, { ok: false, err: `No handler registered for "${endpoint}"` })
   }
 
-  private handleChunk(chunk: Chunk): void {
+  #handleChunk(chunk: Chunk): void {
     const result = this.#chunker.assemble(chunk)
 
     if (result.done) {
@@ -279,17 +279,17 @@ export class IPC {
         this.events.emit('error', new Error(`Failed to parse reassembled packet for chunk ${chunk.i}`))
         return
       }
-      this.handleDirectPacket(packet)
+      this.#handleDirectPacket(packet)
     }
   }
 
-  private sendResponse(id: string, data: ResponseData | ErrorResponseData): void {
+  #sendResponse(id: string, data: ResponseData | ErrorResponseData): void {
     const packet: Packet = {
       v: PROTOCOL_VERSION,
       id,
       e: RESPONSE_ENDPOINT,
       d: data,
     }
-    this.sendPacket(packet)
+    this.#sendPacket(packet)
   }
 }

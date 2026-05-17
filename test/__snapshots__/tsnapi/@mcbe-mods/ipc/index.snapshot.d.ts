@@ -78,12 +78,6 @@ export declare class IPC {
   invoke<T = unknown, R = unknown>(_: string, _: T): Promise<R>;
   invoke<T = unknown, R = unknown>(_: string, _: Serializer<T>, _: Deserializer<R>, _: T): Promise<R>;
   handle<T, R>(_: string, _: (_: T) => R | Promise<R>): () => void;
-  private invokeImpl;
-  private sendPacket;
-  private handleReceive;
-  private handleDirectPacket;
-  private handleChunk;
-  private sendResponse;
 }
 export declare class Transport {
   #private;
