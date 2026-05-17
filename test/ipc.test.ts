@@ -200,4 +200,43 @@ describe('IPC', () => {
     ipc.handle('dup', () => 'ok')
     expect(() => ipc.handle('dup', () => 'ok')).toThrow('already registered')
   })
+
+  it('invoke rejects when no handle is registered', async () => {
+    const promise = ipc.invoke('ghost', { x: 1 })
+
+    const sentPayload = mockTransport.send.mock.calls[0][1]
+    const sentPacket = JSON.parse(sentPayload)
+    const responsePacket = JSON.stringify({
+      v: 1,
+      id: sentPacket.id,
+      e: '@response',
+      d: { ok: false, err: 'No handler registered for "ghost"' },
+    })
+    mockTransport.simulateReceive('ipc:test', responsePacket)
+
+    await expect(promise).rejects.toThrow('No handler registered for "ghost"')
+  })
+
+  it('ignores self-sent invoke packet on loopback', async () => {
+    ipc.handle('echo', (data: string) => `echo:${data}`)
+
+    const promise = ipc.invoke<string, string>('echo', 'hello')
+
+    const sentPayload = mockTransport.send.mock.calls[0][1]
+    const sentPacket = JSON.parse(sentPayload)
+
+    // Simulate loopback: invoke packet returns to sender
+    mockTransport.simulateReceive('ipc:test', JSON.stringify(sentPacket))
+
+    // Simulate normal response from the other side
+    const responsePacket = JSON.stringify({
+      v: 1,
+      id: sentPacket.id,
+      e: '@response',
+      d: { ok: true, data: 'echo:hello' },
+    })
+    mockTransport.simulateReceive('ipc:test', responsePacket)
+
+    await expect(promise).resolves.toBe('echo:hello')
+  })
 })

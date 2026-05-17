@@ -21,17 +21,12 @@ export interface IPCOptions {
   chunkSize?: number;
   compressThreshold?: number;
   chunkTimeout?: number;
-  invokeTimeout?: number;
   maxPacketSize?: number;
 }
 export interface IPCSystemEvents {
   'error': Error;
   'chunk:timeout': {
     id: string;
-  };
-  'invoke:timeout': {
-    id: string;
-    endpoint: string;
   };
 }
 export interface Packet<T = unknown> {

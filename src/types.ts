@@ -11,7 +11,6 @@ export interface IPCOptions {
   chunkSize?: number
   compressThreshold?: number
   chunkTimeout?: number
-  invokeTimeout?: number
   maxPacketSize?: number
 }
 

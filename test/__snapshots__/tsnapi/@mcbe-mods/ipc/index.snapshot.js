@@ -24,8 +24,8 @@ export class IPC {
   chunker
   onHandlers
   handleHandlers
-  pendingInvocations
   responses
+  sentIds
   constructor(_) {}
   send(_, _, _) {}
   on(_, _, _) {}

@@ -73,7 +73,6 @@ interface IPCOptions {
   chunkSize?: number // max chars per chunk (default: 1800)
   compressThreshold?: number // auto-compress above this size (default: 800)
   chunkTimeout?: number // chunk reassembly timeout in ms (default: 5000)
-  invokeTimeout?: number // invoke response timeout in ms (default: 30000)
   maxPacketSize?: number // max raw JSON length (default: 1000000)
 }
 ```

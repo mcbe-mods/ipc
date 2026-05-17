@@ -7,8 +7,7 @@ import type {
   ResponseData,
   Serializer,
 } from './types'
-import { calcGameTicks } from '@mcbe-mods/utils'
-import { system } from '@minecraft/server'
+
 import { EventEmitter } from 'mini-emit'
 import { Chunker } from './chunk'
 import { Compressor } from './compress'
@@ -20,21 +19,12 @@ const DEFAULT_OPTIONS: Required<IPCOptions> = {
   chunkSize: 1800,
   compressThreshold: 800,
   chunkTimeout: 5000,
-  invokeTimeout: 30_000,
   maxPacketSize: 1_000_000,
-}
-
-interface PendingInvoke {
-  resolve: (value: any) => void
-  reject: (reason: any) => void
-  timer: ReturnType<typeof system.runTimeout>
-  endpoint: string
 }
 
 export interface IPCSystemEvents {
   'error': Error
   'chunk:timeout': { id: string }
-  'invoke:timeout': { id: string, endpoint: string }
 }
 
 let idCounter = 0
@@ -52,8 +42,8 @@ export class IPC {
   readonly #chunker: Chunker
   readonly #onHandlers = new Map<string, Set<(data: unknown) => void>>()
   readonly #handleHandlers = new Map<string, (data: unknown) => unknown | Promise<unknown>>()
-  readonly #pendingInvocations = new Map<string, PendingInvoke>()
   readonly #responses = new EventEmitter<Record<string, unknown>>()
+  readonly #sentIds = new Set<string>()
 
   readonly events = new EventEmitter<IPCSystemEvents>()
 
@@ -177,18 +167,10 @@ export class IPC {
     const packet: Packet = { v: PROTOCOL_VERSION, id, e: endpoint, d }
 
     return new Promise<R>((resolve, reject) => {
-      const timer = system.runTimeout(() => {
-        this.#pendingInvocations.delete(id)
-        this.events.emit('invoke:timeout', { id, endpoint })
-        reject(new Error(`Invoke timeout for "${endpoint}"`))
-      }, calcGameTicks(this.#options.invokeTimeout))
-
-      this.#pendingInvocations.set(id, { resolve, reject, timer, endpoint })
+      this.#sentIds.add(id)
 
       this.#responses.once(`resp:${id}`, (response: unknown) => {
-        system.clearRun(timer)
-        this.#pendingInvocations.delete(id)
-
+        this.#sentIds.delete(id)
         const resp = response as ResponseData<R> | ErrorResponseData
         if (resp.ok) {
           const r = deserializer
@@ -248,7 +230,8 @@ export class IPC {
 
     const handleHandler = this.#handleHandlers.get(endpoint)
     if (handleHandler) {
-      Promise.resolve(handleHandler(data))
+      Promise.resolve()
+        .then(() => handleHandler(data))
         .then((result) => {
           this.sendResponse(id, { ok: true, data: result })
         })
@@ -263,7 +246,15 @@ export class IPC {
       for (const handler of onHandlers) {
         handler(data)
       }
+      return
     }
+
+    if (this.#sentIds.has(id)) {
+      this.#sentIds.delete(id)
+      return
+    }
+
+    this.sendResponse(id, { ok: false, err: `No handler registered for "${endpoint}"` })
   }
 
   private handleChunk(chunk: Chunk): void {
