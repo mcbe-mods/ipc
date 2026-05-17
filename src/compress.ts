@@ -1,4 +1,4 @@
-import { compressToUTF16, decompressFromUTF16 } from 'lz-string'
+import { compressToBase64, decompressFromBase64 } from 'lz-string'
 
 /**
  * Applies lz-string compression to payloads exceeding a size threshold.
@@ -24,7 +24,7 @@ export class Compressor {
       return { value: data, compressed: false }
     }
 
-    const compressed = compressToUTF16(data)
+    const compressed = compressToBase64(data)
     if (compressed.length >= data.length) {
       return { value: data, compressed: false }
     }
@@ -41,6 +41,6 @@ export class Compressor {
   decompress(data: string, compressed: boolean): string {
     if (!compressed)
       return data
-    return decompressFromUTF16(data) ?? data
+    return decompressFromBase64(data) ?? data
   }
 }

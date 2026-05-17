@@ -36,6 +36,7 @@
     "release": "bumpp",
     "start": "tsx src/index.ts",
     "test": "pnpm run build && vitest",
+    "bench": "vitest bench",
     "typecheck": "tsc",
     "prepare": "simple-git-hooks"
   },
