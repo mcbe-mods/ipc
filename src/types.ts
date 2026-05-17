@@ -14,7 +14,17 @@ export interface Deserializer<T> {
 export interface IPCOptions {
   /** Namespace used for script events: `ipc:<namespace>`. All addons sharing the same namespace can communicate. @default 'main' */
   namespace?: string
-  /** If a packet (or already compressed payload) exceeds this many characters, it will be split into chunks. @default 1800 */
+  /**
+   * If a packet (or already compressed payload) exceeds this many **bytes**
+   * (not characters), it will be split into chunks.
+   *
+   * Minecraft's `/scriptevent` command has a **2048-byte** message limit:
+   * @see https://learn.microsoft.com/en-us/minecraft/creator/reference/content/commandsreference/examples/commands/scriptevent?view=minecraft-bedrock-stable#usage
+   *
+   * With `compressToBase64`, each character is 1 byte,
+   * so the safe value satisfies `chunkSize + JSON(chunk wrapper) ≤ 2048`.
+   * @default 1800
+   */
   chunkSize?: number
   /** Raw JSON payloads larger than this will be compressed with lz-string before sending. @default 800 */
   compressThreshold?: number

@@ -2,6 +2,9 @@
  * Wraps Minecraft's ScriptEvent system to provide a simple pub/sub transport layer.
  * All addons sharing the same namespace can exchange messages,
  * even if they are loaded from separate behavior packs.
+ *
+ * **Limit**: The underlying `/scriptevent` command accepts at most **2048 bytes** per message.
+ * @see https://learn.microsoft.com/en-us/minecraft/creator/reference/content/commandsreference/examples/commands/scriptevent?view=minecraft-bedrock-stable#usage
  */
 import { ScriptEventSource, system } from '@minecraft/server'
 

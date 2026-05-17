@@ -1,4 +1,9 @@
 import { compressToBase64, decompressFromBase64 } from 'lz-string'
+// Base64 is used instead of UTF16 because its output is pure ASCII
+// (1 char = 1 byte), ensuring each chunk stays within the ScriptEvent
+// 2048-byte limit. UTF16 characters can be 1-3 bytes in UTF-8, making
+// it impossible to guarantee the limit isn't exceeded.
+// @see https://learn.microsoft.com/en-us/minecraft/creator/reference/content/commandsreference/examples/commands/scriptevent?view=minecraft-bedrock-stable#usage
 
 /**
  * Applies lz-string compression to payloads exceeding a size threshold.
