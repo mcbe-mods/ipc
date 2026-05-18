@@ -1,3 +1,5 @@
+import type { PROTOCOL_VERSION } from './constants'
+
 /** Custom serialization — transforms complex data into a string for transport */
 export interface Serializer<T> {
   /** @returns The string representation of `value` */
@@ -41,7 +43,7 @@ export interface IPCOptions {
  */
 export interface Packet<T = unknown> {
   /** Protocol version identifier */
-  v: 1
+  v: typeof PROTOCOL_VERSION
   /** Unique request id, used to match a response to its original invoke call */
   id: string
   /** Endpoint name — determines which handler or listener receives this packet */

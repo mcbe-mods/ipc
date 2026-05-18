@@ -30,7 +30,7 @@ export interface IPCSystemEvents {
   };
 }
 export interface Packet<T = unknown> {
-  v: 1;
+  v: typeof PROTOCOL_VERSION;
   id: string;
   e: string;
   d: T;

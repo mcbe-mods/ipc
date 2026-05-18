@@ -11,7 +11,7 @@ import type {
 import { EventEmitter } from 'mini-emit'
 import { Chunker } from './chunk'
 import { Compressor } from './compress'
-import { PROTOCOL_VERSION, RESPONSE_ENDPOINT } from './constants'
+import { PROTOCOL_VERSION, RESPONSE_ENDPOINT, RESPONSE_EVENT_PREFIX } from './constants'
 import { Transport } from './transport'
 
 const DEFAULT_OPTIONS: Required<IPCOptions> = {
@@ -32,11 +32,15 @@ export interface IPCSystemEvents {
   'chunk:timeout': { id: string }
 }
 
+const ID_RANDOM_BITS = 0x100000000
+const ID_RANDOM_CHARS = 6
+const ID_COUNTER_RADIX = 36
+
 let idCounter = 0
 
 function generateId(): string {
-  const r = ((Math.random() * 0x100000000) >>> 0).toString(16).slice(0, 6).toUpperCase()
-  const c = (idCounter++ % 36).toString(36).toUpperCase()
+  const r = ((Math.random() * ID_RANDOM_BITS) >>> 0).toString(16).slice(0, ID_RANDOM_CHARS).toUpperCase()
+  const c = (idCounter++ % ID_COUNTER_RADIX).toString(ID_COUNTER_RADIX).toUpperCase()
   return r + c
 }
 
@@ -248,7 +252,7 @@ export class IPC {
     return new Promise<R>((resolve, reject) => {
       this.#sentIds.add(id)
 
-      this.#responses.once(`resp:${id}`, (response: unknown) => {
+      this.#responses.once(`${RESPONSE_EVENT_PREFIX}${id}`, (response: unknown) => {
         this.#sentIds.delete(id)
         const resp = response as ResponseData<R> | ErrorResponseData
         if (resp.ok) {
@@ -304,7 +308,7 @@ export class IPC {
 
     // Response from an invoke — resolve/reject the pending promise by id
     if (endpoint === RESPONSE_ENDPOINT) {
-      this.#responses.emit(`resp:${id}`, data)
+      this.#responses.emit(`${RESPONSE_EVENT_PREFIX}${id}`, data)
       return
     }
 
