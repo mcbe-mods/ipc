@@ -86,3 +86,9 @@ export declare class Transport {
   onReceive(_: (_: string) => void): () => void;
 }
 // #endregion
+
+// #region Variables
+export declare const IPC_NAMESPACE: string;
+export declare const PROTOCOL_VERSION: 1;
+export declare const RESPONSE_ENDPOINT: string;
+// #endregion

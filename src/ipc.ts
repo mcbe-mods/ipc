@@ -11,8 +11,8 @@ import type {
 import { EventEmitter } from 'mini-emit'
 import { Chunker } from './chunk'
 import { Compressor } from './compress'
+import { PROTOCOL_VERSION, RESPONSE_ENDPOINT } from './constants'
 import { Transport } from './transport'
-import { PROTOCOL_VERSION, RESPONSE_ENDPOINT } from './types'
 
 const DEFAULT_OPTIONS: Required<IPCOptions> = {
   namespace: 'global',

@@ -84,6 +84,3 @@ export interface ErrorResponseData {
   /** Error description */
   err: string
 }
-
-export const RESPONSE_ENDPOINT = '@response'
-export const PROTOCOL_VERSION = 1 as const

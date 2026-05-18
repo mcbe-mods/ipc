@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { bench, describe } from 'vitest'
+import { IPC_NAMESPACE, PROTOCOL_VERSION, RESPONSE_ENDPOINT } from '../src/constants'
 import { IPC } from '../src/ipc'
 import { mockTransport } from './setup'
 
@@ -34,7 +35,7 @@ describe('IPC.send + on — full fire-and-forget cycle', () => {
     mockTransport.send.mockClear()
     ipc.send('e', SMALL)
     const payload = mockTransport.send.mock.calls[0][1]
-    mockTransport.simulateReceive('ipc:cycle', payload)
+    mockTransport.simulateReceive(`${IPC_NAMESPACE}:cycle`, payload)
   })
 
   bench('large — send (chunked) then simulate all chunks', () => {
@@ -42,7 +43,7 @@ describe('IPC.send + on — full fire-and-forget cycle', () => {
     ipc.send('e', LARGE)
     const calls = mockTransport.send.mock.calls
     for (const [, payload] of calls) {
-      mockTransport.simulateReceive('ipc:cycle', payload)
+      mockTransport.simulateReceive(`${IPC_NAMESPACE}:cycle`, payload)
     }
   })
 })
@@ -61,8 +62,8 @@ describe('IPC.invoke + handle — RPC round-trip', () => {
     mockTransport.send.mockClear()
     const p = ipc.invoke<string, string>('echo', SMALL)
     const id = invokeId(mockTransport.send.mock.calls[0][1])
-    const resp = JSON.stringify({ v: 1, id, e: '@response', d: { ok: true, data: SMALL } })
-    mockTransport.simulateReceive('ipc:rpc', resp)
+    const resp = JSON.stringify({ v: PROTOCOL_VERSION, id, e: RESPONSE_ENDPOINT, d: { ok: true, data: SMALL } })
+    mockTransport.simulateReceive(`${IPC_NAMESPACE}:rpc`, resp)
     await p
   })
 
@@ -70,8 +71,8 @@ describe('IPC.invoke + handle — RPC round-trip', () => {
     mockTransport.send.mockClear()
     const p = ipc.invoke<string, string>('echo', MEDIUM)
     const id = invokeId(mockTransport.send.mock.calls[0][1])
-    const resp = JSON.stringify({ v: 1, id, e: '@response', d: { ok: true, data: MEDIUM } })
-    mockTransport.simulateReceive('ipc:rpc', resp)
+    const resp = JSON.stringify({ v: PROTOCOL_VERSION, id, e: RESPONSE_ENDPOINT, d: { ok: true, data: MEDIUM } })
+    mockTransport.simulateReceive(`${IPC_NAMESPACE}:rpc`, resp)
     await p
   })
 
@@ -79,8 +80,8 @@ describe('IPC.invoke + handle — RPC round-trip', () => {
     mockTransport.send.mockClear()
     const p = ipc.invoke<string, string>('echo', LARGE)
     const id = invokeId(mockTransport.send.mock.calls[0][1])
-    const resp = JSON.stringify({ v: 1, id, e: '@response', d: { ok: true, data: LARGE } })
-    mockTransport.simulateReceive('ipc:rpc', resp)
+    const resp = JSON.stringify({ v: PROTOCOL_VERSION, id, e: RESPONSE_ENDPOINT, d: { ok: true, data: LARGE } })
+    mockTransport.simulateReceive(`${IPC_NAMESPACE}:rpc`, resp)
     await p
   })
 })
@@ -91,7 +92,7 @@ describe('compression ratio — payload size comparison', () => {
   bench('raw JSON vs compressed — small (500 B)', () => {
     mockTransport.send.mockClear()
     ipc.send('e', SMALL)
-    const raw = JSON.stringify({ v: 1, id: '', e: 'e', d: SMALL })
+    const raw = JSON.stringify({ v: PROTOCOL_VERSION, id: '', e: 'e', d: SMALL })
     const sent = mockTransport.send.mock.calls[0][1]
     JSON.stringify({ raw: raw.length, sent: sent.length })
   })
@@ -99,7 +100,7 @@ describe('compression ratio — payload size comparison', () => {
   bench('raw JSON vs compressed — medium (5 KB)', () => {
     mockTransport.send.mockClear()
     ipc.send('e', MEDIUM)
-    const raw = JSON.stringify({ v: 1, id: '', e: 'e', d: MEDIUM })
+    const raw = JSON.stringify({ v: PROTOCOL_VERSION, id: '', e: 'e', d: MEDIUM })
     const calls = mockTransport.send.mock.calls
     let sentLen = 0
     for (const [, payload] of calls) {
@@ -111,7 +112,7 @@ describe('compression ratio — payload size comparison', () => {
   bench('raw JSON vs compressed — large (26 KB)', () => {
     mockTransport.send.mockClear()
     ipc.send('e', LARGE)
-    const raw = JSON.stringify({ v: 1, id: '', e: 'e', d: LARGE })
+    const raw = JSON.stringify({ v: PROTOCOL_VERSION, id: '', e: 'e', d: LARGE })
     const calls = mockTransport.send.mock.calls
     let sentLen = 0
     for (const [, payload] of calls) {

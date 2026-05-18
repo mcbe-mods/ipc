@@ -45,3 +45,9 @@ export class Transport {
   onReceive(_) {}
 }
 // #endregion
+
+// #region Variables
+export var IPC_NAMESPACE /* const */
+export var PROTOCOL_VERSION /* const */
+export var RESPONSE_ENDPOINT /* const */
+// #endregion

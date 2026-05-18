@@ -7,8 +7,7 @@
  * @see https://learn.microsoft.com/en-us/minecraft/creator/reference/content/commandsreference/examples/commands/scriptevent?view=minecraft-bedrock-stable#usage
  */
 import { ScriptEventSource, system } from '@minecraft/server'
-
-const IPC_NAMESPACE = 'ipc'
+import { IPC_NAMESPACE } from './constants'
 
 export class Transport {
   readonly #id: string
