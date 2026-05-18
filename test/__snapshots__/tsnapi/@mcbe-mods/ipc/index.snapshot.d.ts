@@ -71,10 +71,12 @@ export declare class IPC {
   #private;
   readonly events: EventEmitter<IPCSystemEvents>;
   constructor(_?: IPCOptions);
+  send(_: string): void;
   send<T>(_: string, _: NoInfer<T>): void;
   send<T>(_: string, _: Serializer<T>, _: NoInfer<T>): void;
   on<T>(_: string, _: (_: T) => void): () => void;
   on<T>(_: string, _: Deserializer<T>, _: (_: T) => void): () => void;
+  invoke<R = unknown>(_: string): Promise<R>;
   invoke<T = unknown, R = unknown>(_: string, _: T): Promise<R>;
   invoke<T = unknown, R = unknown>(_: string, _: Serializer<T>, _: Deserializer<R>, _: T): Promise<R>;
   handle<T, R>(_: string, _: (_: T) => R | Promise<R>): () => void;

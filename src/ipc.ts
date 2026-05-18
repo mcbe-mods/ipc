@@ -84,6 +84,10 @@ export class IPC {
    * @param data - The data to send. If using a custom serializer, this is the typed value.
    * @example
    * ```ts
+   * ipc.send('notify')
+   * ```
+   * @example
+   * ```ts
    * ipc.send('notify', { message: 'hello' })
    * ```
    * @example
@@ -91,9 +95,10 @@ export class IPC {
    * ipc.send('notify', mySerializer, { message: 'hello' })
    * ```
    */
+  send(endpoint: string): void
   send<T>(endpoint: string, data: NoInfer<T>): void
   send<T>(endpoint: string, serializer: Serializer<T>, data: NoInfer<T>): void
-  send<T>(endpoint: string, serializerOrData: Serializer<T> | T, data?: T): void {
+  send<T = never>(endpoint: string, serializerOrData?: Serializer<T> | T, data?: T): void {
     const id = generateId()
     const d = data !== undefined
       ? (serializerOrData as Serializer<T>).serialize(data as T)
@@ -179,7 +184,12 @@ export class IPC {
    * ```ts
    * const result = await ipc.invoke('calc', mySerializer, myDeserializer, data)
    * ```
+   * @example
+   * ```ts
+   * const result = await ipc.invoke<string>('ping')
+   * ```
    */
+  invoke<R = unknown>(endpoint: string): Promise<R>
   invoke<T = unknown, R = unknown>(endpoint: string, data: T): Promise<R>
   invoke<T = unknown, R = unknown>(
     endpoint: string,
@@ -187,9 +197,9 @@ export class IPC {
     deserializer: Deserializer<R>,
     data: T,
   ): Promise<R>
-  invoke<T = unknown, R = unknown>(
+  invoke<T = never, R = unknown>(
     endpoint: string,
-    serializerOrData: Serializer<T> | T,
+    serializerOrData?: Serializer<T> | T,
     deserializer?: Deserializer<R>,
     data?: T,
   ): Promise<R> {
