@@ -69,11 +69,38 @@ ipc.on('channel', myDeser, (data) => {
 
 ```ts
 interface IPCOptions {
-  namespace?: string // scriptEvent ID: ipc:<namespace> (default: 'main')
-  chunkSize?: number // max chars per chunk (default: 1800)
-  compressThreshold?: number // auto-compress above this size (default: 800)
-  chunkTimeout?: number // chunk reassembly timeout in ms (default: 5000)
-  maxPacketSize?: number // max raw JSON length (default: 1000000)
+  /**
+   * Namespace for script events: `ipc:<namespace>`.
+   * All addons with the same namespace can communicate.
+   * @default 'global'
+   */
+  namespace?: string
+  /**
+   * Max bytes per chunk before splitting.
+   *
+   * Minecraft's `/scriptevent` has a **2048-byte** limit:
+   * @see https://learn.microsoft.com/en-us/minecraft/creator/reference/content/commandsreference/examples/commands/scriptevent?view=minecraft-bedrock-stable#usage
+   *
+   * With Base64, 1 char = 1 byte, so safe value satisfies
+   * `chunkSize + JSON(wrapper) ≤ 2048`.
+   * @default 1800
+   */
+  chunkSize?: number
+  /**
+   * Raw JSON payloads larger than this are lz-string compressed before sending.
+   * @default 800
+   */
+  compressThreshold?: number
+  /**
+   * Chunk reassembly timeout in milliseconds.
+   * @default 5000
+   */
+  chunkTimeout?: number
+  /**
+   * Max serialized packet size in characters. Throws if exceeded.
+   * @default 1_000_000
+   */
+  maxPacketSize?: number
 }
 ```
 

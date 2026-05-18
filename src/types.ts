@@ -12,7 +12,7 @@ export interface Deserializer<T> {
 
 /** Options for creating an IPC instance */
 export interface IPCOptions {
-  /** Namespace used for script events: `ipc:<namespace>`. All addons sharing the same namespace can communicate. @default 'main' */
+  /** Namespace used for script events: `ipc:<namespace>`. All addons sharing the same namespace can communicate. @default 'global' */
   namespace?: string
   /**
    * If a packet (or already compressed payload) exceeds this many **bytes**

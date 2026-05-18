@@ -15,7 +15,7 @@ import { Transport } from './transport'
 import { PROTOCOL_VERSION, RESPONSE_ENDPOINT } from './types'
 
 const DEFAULT_OPTIONS: Required<IPCOptions> = {
-  namespace: 'main',
+  namespace: 'global',
   chunkSize: 1800,
   compressThreshold: 800,
   chunkTimeout: 5000,
