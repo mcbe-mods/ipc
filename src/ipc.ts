@@ -330,7 +330,12 @@ export class IPC {
     const onHandlers = this.#onHandlers.get(endpoint)
     if (onHandlers) {
       for (const handler of onHandlers) {
-        handler(data)
+        try {
+          handler(data)
+        }
+        catch (e) {
+          this.events.emit('error', e as Error)
+        }
       }
       return
     }
