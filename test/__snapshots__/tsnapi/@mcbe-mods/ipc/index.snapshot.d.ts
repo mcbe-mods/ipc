@@ -25,9 +25,6 @@ export interface IPCOptions {
 }
 export interface IPCSystemEvents {
   'error': Error;
-  'chunk:timeout': {
-    id: string;
-  };
 }
 export interface Packet<T = unknown> {
   v: typeof PROTOCOL_VERSION;

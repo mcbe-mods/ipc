@@ -25,11 +25,13 @@ const DEFAULT_OPTIONS: Required<IPCOptions> = {
 /**
  * Events emitted by {@link IPC.events}.
  * - `error`: An internal error occurred (e.g., malformed chunk reassembly).
- * - `chunk:timeout`: A chunked packet timed out waiting for remaining fragments.
  */
+export const IPC_SYSTEM_EVENTS = {
+  ERROR: 'error',
+} as const
+
 export interface IPCSystemEvents {
-  'error': Error
-  'chunk:timeout': { id: string }
+  [IPC_SYSTEM_EVENTS.ERROR]: Error
 }
 
 const ID_RANDOM_BITS = 0x100000000
@@ -72,7 +74,7 @@ export class IPC {
         this.#handleReceive(payload)
       }
       catch (e) {
-        this.events.emit('error', e as Error)
+        this.events.emit(IPC_SYSTEM_EVENTS.ERROR, e as Error)
       }
     })
   }
@@ -344,7 +346,7 @@ export class IPC {
           handler(data)
         }
         catch (e) {
-          this.events.emit('error', e as Error)
+          this.events.emit(IPC_SYSTEM_EVENTS.ERROR, e as Error)
         }
       }
       return
@@ -370,7 +372,7 @@ export class IPC {
         packet = JSON.parse(raw) as Packet
       }
       catch {
-        this.events.emit('error', new Error(`Failed to parse reassembled packet for chunk ${chunk.i}`))
+        this.events.emit(IPC_SYSTEM_EVENTS.ERROR, new Error(`Failed to parse reassembled packet for chunk ${chunk.i}`))
         return
       }
       this.#handleDirectPacket(packet)
