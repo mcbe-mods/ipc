@@ -323,6 +323,13 @@ export class IPC {
       return
     }
 
+    // Packet was sent by this instance itself (loopback via ScriptEvent)
+    // Must check before handleHandler to prevent self-invocation of handle()
+    if (this.#sentIds.has(id)) {
+      this.#sentIds.delete(id)
+      return
+    }
+
     // Handle request — execute the registered responder and send back the result
     const handleHandler = this.#handleHandlers.get(endpoint)
     if (handleHandler) {
@@ -348,12 +355,6 @@ export class IPC {
           this.events.emit(IPC_SYSTEM_EVENTS.ERROR, e as Error)
         }
       }
-      return
-    }
-
-    // Packet was sent by this instance itself (loopback via ScriptEvent) — ignore quietly
-    if (this.#sentIds.has(id)) {
-      this.#sentIds.delete(id)
       return
     }
 
