@@ -20,7 +20,6 @@ export interface IPCOptions {
   namespace?: string;
   chunkSize?: number;
   compressThreshold?: number;
-  chunkTimeout?: number;
   maxPacketSize?: number;
 }
 export interface IPCSystemEvents {
@@ -44,7 +43,7 @@ export interface Serializer<T> {
 // #region Classes
 export declare class Chunker {
   #private;
-  constructor(_: number, _: number);
+  constructor(_: number);
   split(_: string, _: string, _: boolean): Chunk[];
   assemble(_: Chunk): {
     done: false;

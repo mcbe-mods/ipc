@@ -18,7 +18,6 @@ const DEFAULT_OPTIONS: Required<IPCOptions> = {
   namespace: 'global',
   chunkSize: 1800,
   compressThreshold: 800,
-  chunkTimeout: 5000,
   maxPacketSize: 1_000_000,
 }
 
@@ -67,7 +66,7 @@ export class IPC {
     this.#options = { ...DEFAULT_OPTIONS, ...options }
     this.#transport = new Transport(this.#options.namespace)
     this.#compressor = new Compressor(this.#options.compressThreshold)
-    this.#chunker = new Chunker(this.#options.chunkSize, this.#options.chunkTimeout)
+    this.#chunker = new Chunker(this.#options.chunkSize)
 
     this.#transport.onReceive((payload) => {
       try {

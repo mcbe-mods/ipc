@@ -4,9 +4,8 @@
 // #region Classes
 export class Chunker {
   chunkSize
-  timeout
   buffer
-  constructor(_, _) {}
+  constructor(_) {}
   split(_, _, _) {}
   assemble(_) {}
   get pendingCount() {}
