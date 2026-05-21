@@ -24,13 +24,16 @@ const DEFAULT_OPTIONS: Required<IPCOptions> = {
 /**
  * Events emitted by {@link IPC.events}.
  * - `error`: An internal error occurred (e.g., malformed chunk reassembly).
+ * - `invalid-packet`: A received payload could not be parsed as a valid packet.
  */
 export const IPC_SYSTEM_EVENTS = {
   ERROR: 'error',
+  INVALID_PACKET: 'invalid-packet',
 } as const
 
 export interface IPCSystemEvents {
   [IPC_SYSTEM_EVENTS.ERROR]: Error
+  [IPC_SYSTEM_EVENTS.INVALID_PACKET]: { payload: string }
 }
 
 const ID_RANDOM_BITS = 0x100000000
@@ -325,6 +328,9 @@ export class IPC {
     }
     else if ('i' in parsed) {
       this.#handleChunk(parsed as Chunk)
+    }
+    else {
+      this.events.emit(IPC_SYSTEM_EVENTS.INVALID_PACKET, { payload })
     }
   }
 
