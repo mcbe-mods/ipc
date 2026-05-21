@@ -53,7 +53,8 @@ export class IPC {
   readonly #onHandlers = new Map<string, Set<(data: unknown) => void>>()
   readonly #handleHandlers = new Map<string, (data: unknown) => unknown | Promise<unknown>>()
   readonly #responses = new EventEmitter<Record<string, unknown>>()
-  readonly #sentIds = new Set<string>() // IDs sent by this instance — used to detect loopback and prevent false "No handler" errors
+  readonly #sentIds = new Set<string>()
+  #transportUnsubscribe: () => void
 
   readonly events = new EventEmitter<IPCSystemEvents>()
 
@@ -68,7 +69,7 @@ export class IPC {
     this.#compressor = new Compressor(this.#options.compressThreshold)
     this.#chunker = new Chunker(this.#options.chunkSize)
 
-    this.#transport.onReceive((payload) => {
+    this.#transportUnsubscribe = this.#transport.onReceive((payload) => {
       try {
         this.#handleReceive(payload)
       }
@@ -76,6 +77,19 @@ export class IPC {
         this.events.emit(IPC_SYSTEM_EVENTS.ERROR, e as Error)
       }
     })
+  }
+
+  /**
+   * Destroy this IPC instance.
+   * Unsubscribes from the transport, clears all handlers and pending responses.
+   * After calling this, the instance will no longer receive or process any messages.
+   */
+  dispose(): void {
+    this.#transportUnsubscribe()
+    this.#onHandlers.clear()
+    this.#handleHandlers.clear()
+    this.#sentIds.clear()
+    this.#responses.clear()
   }
 
   /**
