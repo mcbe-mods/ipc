@@ -24,6 +24,9 @@ export interface IPCOptions {
 }
 export interface IPCSystemEvents {
   [IPC_SYSTEM_EVENTS.ERROR]: Error;
+  [IPC_SYSTEM_EVENTS.INVALID_PACKET]: {
+    payload: string;
+  };
 }
 export interface Packet<T = unknown> {
   v: typeof PROTOCOL_VERSION;
@@ -67,6 +70,7 @@ export declare class IPC {
   #private;
   readonly events: EventEmitter<IPCSystemEvents>;
   constructor(_?: IPCOptions);
+  dispose(): void;
   send(_: string): void;
   send<T>(_: string, _: NoInfer<T>): void;
   send<T>(_: string, _: Serializer<T>, _: NoInfer<T>): void;
@@ -87,6 +91,10 @@ export declare class Transport {
 
 // #region Variables
 export declare const IPC_NAMESPACE: string;
+export declare const IPC_SYSTEM_EVENTS: {
+  readonly ERROR: "error";
+  readonly INVALID_PACKET: "invalid-packet";
+};
 export declare const PROTOCOL_VERSION: 1;
 export declare const RESPONSE_ENDPOINT: string;
 // #endregion

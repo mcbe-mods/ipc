@@ -38,4 +38,9 @@ describe('Compressor', () => {
     const result = c.decompress('hello', false)
     expect(result).toBe('hello')
   })
+
+  it('throws on decompression failure', () => {
+    const c = new Compressor(100)
+    expect(() => c.decompress('invalid-base64!!!', true)).toThrow('Decompression failed')
+  })
 })

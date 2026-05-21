@@ -100,4 +100,10 @@ describe('Chunker', () => {
       expect(r.compressed).toBe(true)
     }
   })
+
+  it('returns false for chunk with t <= 0', () => {
+    const chunker = new Chunker(10)
+    const r = chunker.assemble({ i: 'bad', s: 0, t: 0, d: 'data' })
+    expect(r.done).toBe(false)
+  })
 })

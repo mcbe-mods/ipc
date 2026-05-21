@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IPC_NAMESPACE, PROTOCOL_VERSION, RESPONSE_ENDPOINT } from '../src/constants'
-import { IPC } from '../src/ipc'
+import { IPC, IPC_SYSTEM_EVENTS } from '../src/ipc'
 import { mockTransport } from './setup'
 
 describe('IPC', () => {
@@ -280,5 +280,49 @@ describe('IPC', () => {
     mockTransport.simulateReceive(`${IPC_NAMESPACE}:test`, responsePacket)
 
     await expect(promise).resolves.toBe('echo:hello')
+  })
+
+  it('does not execute handle() on loopback invoke', async () => {
+    const handler = vi.fn(() => 'should-not-run')
+    ipc.handle('test', handler)
+
+    const promise = ipc.invoke('test', 'data')
+
+    const sentPayload = mockTransport.send.mock.calls[0][1]
+    const sentPacket = JSON.parse(sentPayload)
+
+    // Simulate loopback — handle() should NOT be triggered
+    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test`, JSON.stringify(sentPacket))
+    expect(handler).not.toHaveBeenCalled()
+
+    // Resolve with a response from "the other side"
+    const responsePacket = JSON.stringify({
+      v: PROTOCOL_VERSION,
+      id: sentPacket.id,
+      e: RESPONSE_ENDPOINT,
+      d: { ok: true, data: 'ok' },
+    })
+    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test`, responsePacket)
+    await expect(promise).resolves.toBe('ok')
+  })
+
+  it('stops receiving messages after dispose()', () => {
+    const handler = vi.fn()
+    ipc.on('test', handler)
+    ipc.dispose()
+
+    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test`, JSON.stringify({ v: PROTOCOL_VERSION, id: 'X', e: 'test', d: 42 }))
+
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('emits invalid-packet event for unrecognized payloads', () => {
+    const handler = vi.fn()
+    ipc.events.on(IPC_SYSTEM_EVENTS.INVALID_PACKET, handler)
+
+    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test`, JSON.stringify({ foo: 'bar' }))
+
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(handler).toHaveBeenCalledWith({ payload: JSON.stringify({ foo: 'bar' }) })
   })
 })
