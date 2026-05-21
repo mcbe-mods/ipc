@@ -218,6 +218,47 @@ describe('IPC', () => {
     await expect(promise).rejects.toThrow('No handler registered for "ghost"')
   })
 
+  it('isolates on() handlers across different namespaces', () => {
+    const ipc2 = new IPC({ namespace: 'ns2' })
+    const handler = vi.fn()
+    ipc2.on('ping', handler)
+
+    // ipc (namespace: 'test') sends — payload goes on ipc:test
+    ipc.send('ping', { msg: 'hello' })
+    const sentPayload = mockTransport.send.mock.lastCall?.[1]
+
+    // Simulate packet arriving on ipc:test (sender's namespace)
+    // ipc2 listens on ipc:ns2, so it should NOT receive this
+    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test`, sentPayload)
+    expect(handler).not.toHaveBeenCalled()
+
+    // Simulate packet arriving on ipc:ns2 — ipc2 SHOULD receive it
+    mockTransport.simulateReceive(`${IPC_NAMESPACE}:ns2`, sentPayload)
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(handler).toHaveBeenCalledWith({ msg: 'hello' })
+  })
+
+  it('isolates handle() handlers across different namespaces', () => {
+    const ipc2 = new IPC({ namespace: 'ns2' })
+    const handler = vi.fn(() => 'pong')
+    ipc2.handle('ping', handler)
+
+    // ipc (namespace: 'test') invokes
+    ipc.invoke('ping', 'hello')
+
+    const sentPayload = mockTransport.send.mock.lastCall?.[1]
+
+    // Simulate on ns2's namespace — ipc2 should NOT handle
+    mockTransport.simulateReceive(`${IPC_NAMESPACE}:ns2`, sentPayload)
+    expect(handler).not.toHaveBeenCalled()
+
+    // No RESPONSE_ENDPOINT should have been sent from ipc2 back
+    for (const [, payload] of mockTransport.send.mock.calls) {
+      const parsed = JSON.parse(payload)
+      expect(parsed.e).not.toBe(RESPONSE_ENDPOINT)
+    }
+  })
+
   it('ignores self-sent invoke packet on loopback', async () => {
     ipc.handle('echo', (data: string) => `echo:${data}`)
 
