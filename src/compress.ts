@@ -46,6 +46,9 @@ export class Compressor {
   decompress(data: string, compressed: boolean): string {
     if (!compressed)
       return data
-    return decompressFromBase64(data) ?? data
+    const decompressed = decompressFromBase64(data)
+    if (decompressed === null)
+      throw new Error('Decompression failed')
+    return decompressed
   }
 }

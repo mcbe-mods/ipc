@@ -57,6 +57,10 @@ export class Chunker {
   assemble(
     chunk: Chunk,
   ): { done: false } | { done: true, data: string, compressed: boolean } {
+    if (chunk.t <= 0) {
+      return { done: false }
+    }
+
     let pending = this.#buffer.get(chunk.i)
 
     if (!pending) {
