@@ -24,7 +24,7 @@ export interface IPCOptions {
   maxPacketSize?: number;
 }
 export interface IPCSystemEvents {
-  'error': Error;
+  [IPC_SYSTEM_EVENTS.ERROR]: Error;
 }
 export interface Packet<T = unknown> {
   v: typeof PROTOCOL_VERSION;
