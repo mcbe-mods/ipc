@@ -18,7 +18,7 @@ npm install @mcbe-mods/ipc
 ## Usage
 
 ```ts
-import { IPC } from '@mcbe-mods/ipc'
+import { IPC, IPC_SYSTEM_EVENTS } from '@mcbe-mods/ipc'
 
 const ipc = new IPC({ namespace: 'myAddon' })
 // scriptEvent ID → ipc:myAddon
@@ -49,6 +49,13 @@ ipc.handle<Req, Res>('inv.get', (req) => {
 ```ts
 const off = ipc.on('chat', handler)
 off()
+```
+
+### Lifecycle
+
+```ts
+// Destroy the instance — unsubscribes from transport, clears all handlers
+ipc.dispose()
 ```
 
 ### Custom serializer
@@ -92,17 +99,31 @@ interface IPCOptions {
    */
   compressThreshold?: number
   /**
-   * Chunk reassembly timeout in milliseconds.
-   * @default 5000
-   */
-  chunkTimeout?: number
-  /**
    * Max serialized packet size in characters. Throws if exceeded.
    * @default 1_000_000
    */
   maxPacketSize?: number
 }
 ```
+
+## Events
+
+System-level events emitted by `ipc.events` — listen with type safety via `IPC_SYSTEM_EVENTS`:
+
+```ts
+ipc.events.on(IPC_SYSTEM_EVENTS.ERROR, (err) => {
+  console.error('IPC error:', err.message)
+})
+
+ipc.events.on(IPC_SYSTEM_EVENTS.INVALID_PACKET, ({ payload }) => {
+  console.warn('Received unrecognized payload:', payload)
+})
+```
+
+| Event | Payload | When |
+|-------|---------|------|
+| `'error'` | `Error` | An internal error occurred (malformed chunk, parse failure, etc.) |
+| `'invalid-packet'` | `{ payload: string }` | Received data that isn't a valid packet or chunk |
 
 ## License
 
