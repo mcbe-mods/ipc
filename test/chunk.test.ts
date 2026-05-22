@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { Chunker } from '../src/chunk'
-import { triggerTimeouts } from './setup'
 
 describe('Chunker', () => {
   it('splits data into multiple chunks', () => {
-    const chunker = new Chunker(10, 5000)
+    const chunker = new Chunker(10)
     const data = 'A'.repeat(25)
     const chunks = chunker.split('test1', data, false)
 
@@ -17,7 +16,7 @@ describe('Chunker', () => {
   })
 
   it('marks compressed flag on all chunks', () => {
-    const chunker = new Chunker(10, 5000)
+    const chunker = new Chunker(10)
     const data = 'A'.repeat(25)
     const chunks = chunker.split('test2', data, true)
 
@@ -27,7 +26,7 @@ describe('Chunker', () => {
   })
 
   it('single chunk for small data', () => {
-    const chunker = new Chunker(100, 5000)
+    const chunker = new Chunker(100)
     const chunks = chunker.split('test3', 'hello', false)
     expect(chunks.length).toBe(1)
     expect(chunks[0].s).toBe(0)
@@ -35,7 +34,7 @@ describe('Chunker', () => {
   })
 
   it('assembles chunks in order', () => {
-    const chunker = new Chunker(5, 5000)
+    const chunker = new Chunker(5)
     const original = 'HelloWorldExtra'
     const chunks = chunker.split('pkt1', original, false)
 
@@ -56,7 +55,7 @@ describe('Chunker', () => {
   })
 
   it('handles out-of-order chunks', () => {
-    const chunker = new Chunker(5, 5000)
+    const chunker = new Chunker(5)
     const original = 'HelloWorldEx'
     const chunks = chunker.split('pkt2', original, false)
 
@@ -73,7 +72,7 @@ describe('Chunker', () => {
   })
 
   it('ignores duplicate chunks', () => {
-    const chunker = new Chunker(5, 5000)
+    const chunker = new Chunker(5)
     const original = 'HelloWorldEx'
     const chunks = chunker.split('pkt3', original, false)
 
@@ -91,19 +90,8 @@ describe('Chunker', () => {
     }
   })
 
-  it('times out incomplete packets', () => {
-    const chunker = new Chunker(5, 100)
-    const chunks = chunker.split('pkt4', 'HelloWorld', false)
-
-    chunker.assemble(chunks[0])
-    expect(chunker.pendingCount).toBe(1)
-
-    triggerTimeouts()
-    expect(chunker.pendingCount).toBe(0)
-  })
-
   it('compressed flag is preserved during assemble', () => {
-    const chunker = new Chunker(100, 5000)
+    const chunker = new Chunker(100)
     const chunks = chunker.split('pkt5', 'compressed-data', true)
 
     const r = chunker.assemble(chunks[0])
@@ -111,5 +99,11 @@ describe('Chunker', () => {
     if (r.done) {
       expect(r.compressed).toBe(true)
     }
+  })
+
+  it('returns false for chunk with t <= 0', () => {
+    const chunker = new Chunker(10)
+    const r = chunker.assemble({ i: 'bad', s: 0, t: 0, d: 'data' })
+    expect(r.done).toBe(false)
   })
 })

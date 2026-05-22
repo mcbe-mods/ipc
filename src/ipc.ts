@@ -18,20 +18,22 @@ const DEFAULT_OPTIONS: Required<IPCOptions> = {
   namespace: 'global',
   chunkSize: 1800,
   compressThreshold: 800,
-  chunkTimeout: 5000,
   maxPacketSize: 1_000_000,
 }
 
 /**
  * Events emitted by {@link IPC.events}.
  * - `error`: An internal error occurred (e.g., malformed chunk reassembly).
+ * - `invalid-packet`: A received payload could not be parsed as a valid packet.
  */
 export const IPC_SYSTEM_EVENTS = {
   ERROR: 'error',
+  INVALID_PACKET: 'invalid-packet',
 } as const
 
 export interface IPCSystemEvents {
   [IPC_SYSTEM_EVENTS.ERROR]: Error
+  [IPC_SYSTEM_EVENTS.INVALID_PACKET]: { payload: string }
 }
 
 const ID_RANDOM_BITS = 0x100000000
@@ -54,7 +56,8 @@ export class IPC {
   readonly #onHandlers = new Map<string, Set<(data: unknown) => void>>()
   readonly #handleHandlers = new Map<string, (data: unknown) => unknown | Promise<unknown>>()
   readonly #responses = new EventEmitter<Record<string, unknown>>()
-  readonly #sentIds = new Set<string>() // IDs sent by this instance — used to detect loopback and prevent false "No handler" errors
+  readonly #sentIds = new Set<string>()
+  #transportUnsubscribe: () => void
 
   readonly events = new EventEmitter<IPCSystemEvents>()
 
@@ -67,9 +70,9 @@ export class IPC {
     this.#options = { ...DEFAULT_OPTIONS, ...options }
     this.#transport = new Transport(this.#options.namespace)
     this.#compressor = new Compressor(this.#options.compressThreshold)
-    this.#chunker = new Chunker(this.#options.chunkSize, this.#options.chunkTimeout)
+    this.#chunker = new Chunker(this.#options.chunkSize)
 
-    this.#transport.onReceive((payload) => {
+    this.#transportUnsubscribe = this.#transport.onReceive((payload) => {
       try {
         this.#handleReceive(payload)
       }
@@ -77,6 +80,19 @@ export class IPC {
         this.events.emit(IPC_SYSTEM_EVENTS.ERROR, e as Error)
       }
     })
+  }
+
+  /**
+   * Destroy this IPC instance.
+   * Unsubscribes from the transport, clears all handlers and pending responses.
+   * After calling this, the instance will no longer receive or process any messages.
+   */
+  dispose(): void {
+    this.#transportUnsubscribe()
+    this.#onHandlers.clear()
+    this.#handleHandlers.clear()
+    this.#sentIds.clear()
+    this.#responses.clear()
   }
 
   /**
@@ -313,6 +329,9 @@ export class IPC {
     else if ('i' in parsed) {
       this.#handleChunk(parsed as Chunk)
     }
+    else {
+      this.events.emit(IPC_SYSTEM_EVENTS.INVALID_PACKET, { payload })
+    }
   }
 
   #handleDirectPacket(packet: Packet): void {
@@ -321,6 +340,13 @@ export class IPC {
     // Response from an invoke — resolve/reject the pending promise by id
     if (endpoint === RESPONSE_ENDPOINT) {
       this.#responses.emit(`${RESPONSE_EVENT_PREFIX}${id}`, data)
+      return
+    }
+
+    // Packet was sent by this instance itself (loopback via ScriptEvent)
+    // Must check before handleHandler to prevent self-invocation of handle()
+    if (this.#sentIds.has(id)) {
+      this.#sentIds.delete(id)
       return
     }
 
@@ -349,12 +375,6 @@ export class IPC {
           this.events.emit(IPC_SYSTEM_EVENTS.ERROR, e as Error)
         }
       }
-      return
-    }
-
-    // Packet was sent by this instance itself (loopback via ScriptEvent) — ignore quietly
-    if (this.#sentIds.has(id)) {
-      this.#sentIds.delete(id)
       return
     }
 

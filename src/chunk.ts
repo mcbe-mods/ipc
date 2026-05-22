@@ -1,13 +1,10 @@
 import type { Chunk } from './types'
-import { calcGameTicks } from '@mcbe-mods/utils'
-import { system } from '@minecraft/server'
 
 interface PendingPacket {
   fragments: string[]
   received: number
   total: number
   compressed: boolean
-  timer: ReturnType<typeof system.runTimeout>
 }
 
 /**
@@ -16,16 +13,13 @@ interface PendingPacket {
  */
 export class Chunker {
   readonly #chunkSize: number
-  readonly #timeout: number
   readonly #buffer = new Map<string, PendingPacket>()
 
   /**
    * @param chunkSize - Maximum characters per chunk
-   * @param timeout - Timeout in ms before discarding incomplete reassemblies
    */
-  constructor(chunkSize: number, timeout: number) {
+  constructor(chunkSize: number) {
     this.#chunkSize = chunkSize
-    this.#timeout = timeout
   }
 
   /**
@@ -63,6 +57,10 @@ export class Chunker {
   assemble(
     chunk: Chunk,
   ): { done: false } | { done: true, data: string, compressed: boolean } {
+    if (chunk.t <= 0) {
+      return { done: false }
+    }
+
     let pending = this.#buffer.get(chunk.i)
 
     if (!pending) {
@@ -71,9 +69,6 @@ export class Chunker {
         received: 0,
         total: chunk.t,
         compressed: chunk.c === 1,
-        timer: system.runTimeout(() => {
-          this.#buffer.delete(chunk.i)
-        }, calcGameTicks(this.#timeout)),
       }
       this.#buffer.set(chunk.i, pending)
     }
@@ -86,7 +81,6 @@ export class Chunker {
     pending.received++
 
     if (pending.received === pending.total) {
-      system.clearRun(pending.timer)
       this.#buffer.delete(chunk.i)
       return { done: true, data: pending.fragments.join(''), compressed: pending.compressed }
     }

@@ -4,9 +4,8 @@
 // #region Classes
 export class Chunker {
   chunkSize
-  timeout
   buffer
-  constructor(_, _) {}
+  constructor(_) {}
   split(_, _, _) {}
   assemble(_) {}
   get pendingCount() {}
@@ -26,7 +25,9 @@ export class IPC {
   handleHandlers
   responses
   sentIds
+  transportUnsubscribe
   constructor(_) {}
+  dispose() {}
   send(_, _, _) {}
   on(_, _, _) {}
   invoke(_, _, _, _) {}
@@ -48,6 +49,7 @@ export class Transport {
 
 // #region Variables
 export var IPC_NAMESPACE /* const */
+export var IPC_SYSTEM_EVENTS /* const */
 export var PROTOCOL_VERSION /* const */
 export var RESPONSE_ENDPOINT /* const */
 // #endregion

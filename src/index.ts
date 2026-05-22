@@ -1,7 +1,7 @@
 export { Chunker } from './chunk'
 export { Compressor } from './compress'
 export { IPC_NAMESPACE, PROTOCOL_VERSION, RESPONSE_ENDPOINT } from './constants'
-export { IPC } from './ipc'
+export { IPC, IPC_SYSTEM_EVENTS } from './ipc'
 export type { IPCSystemEvents } from './ipc'
 export { Transport } from './transport'
 export type { Chunk, Deserializer, ErrorResponseData, IPCOptions, Packet, ResponseData, Serializer } from './types'

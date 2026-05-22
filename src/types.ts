@@ -30,8 +30,6 @@ export interface IPCOptions {
   chunkSize?: number
   /** Raw JSON payloads larger than this will be compressed with lz-string before sending. @default 800 */
   compressThreshold?: number
-  /** How long (in ms) to wait for all chunks of a fragmented packet before discarding. @default 5000 */
-  chunkTimeout?: number
   /** Maximum allowed serialized packet size in characters. Throws if exceeded. @default 1_000_000 */
   maxPacketSize?: number
 }
