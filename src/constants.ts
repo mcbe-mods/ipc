@@ -1,8 +1,10 @@
-/** ScriptEvent ID prefix: `ipc:<namespace>` */
-export const IPC_NAMESPACE = 'ipc'
-
-/** Internal endpoint used for invoke response routing */
-export const RESPONSE_ENDPOINT = '@response'
+/** Channels used for internal message routing */
+export const CHANNELS = {
+  /** Base prefix for all ScriptEvent IDs: `ipc:<namespace>:<channel>` */
+  PREFIX: 'ipc',
+  /** Internal response routing channel for invoke/handle */
+  RESPONSE: '@response',
+} as const
 
 /** Event emitter prefix for matching invoke requests to their responses */
 export const RESPONSE_EVENT_PREFIX = 'invoke-response:'

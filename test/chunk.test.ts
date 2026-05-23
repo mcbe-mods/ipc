@@ -8,11 +8,11 @@ describe('Chunker', () => {
     const chunks = chunker.split('test1', data, false)
 
     expect(chunks.length).toBe(3)
-    expect(chunks[0].i).toBe('test1')
-    expect(chunks[0].s).toBe(0)
-    expect(chunks[0].t).toBe(3)
-    expect(chunks[0].d.length).toBe(10)
-    expect(chunks[0].c).toBeUndefined()
+    expect(chunks[0].id).toBe('test1')
+    expect(chunks[0].seq).toBe(0)
+    expect(chunks[0].total).toBe(3)
+    expect(chunks[0].data.length).toBe(10)
+    expect(chunks[0].compressed).toBeUndefined()
   })
 
   it('marks compressed flag on all chunks', () => {
@@ -20,17 +20,17 @@ describe('Chunker', () => {
     const data = 'A'.repeat(25)
     const chunks = chunker.split('test2', data, true)
 
-    expect(chunks[0].c).toBe(1)
-    expect(chunks[1].c).toBe(1)
-    expect(chunks[2].c).toBe(1)
+    expect(chunks[0].compressed).toBe(true)
+    expect(chunks[1].compressed).toBe(true)
+    expect(chunks[2].compressed).toBe(true)
   })
 
   it('single chunk for small data', () => {
     const chunker = new Chunker(100)
     const chunks = chunker.split('test3', 'hello', false)
     expect(chunks.length).toBe(1)
-    expect(chunks[0].s).toBe(0)
-    expect(chunks[0].t).toBe(1)
+    expect(chunks[0].seq).toBe(0)
+    expect(chunks[0].total).toBe(1)
   })
 
   it('assembles chunks in order', () => {
@@ -103,7 +103,7 @@ describe('Chunker', () => {
 
   it('returns false for chunk with t <= 0', () => {
     const chunker = new Chunker(10)
-    const r = chunker.assemble({ i: 'bad', s: 0, t: 0, d: 'data' })
+    const r = chunker.assemble({ id: 'bad', seq: 0, total: 0, data: 'data' })
     expect(r.done).toBe(false)
   })
 })

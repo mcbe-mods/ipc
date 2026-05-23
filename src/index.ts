@@ -1,6 +1,6 @@
 export { Chunker } from './chunk'
 export { Compressor } from './compress'
-export { IPC_NAMESPACE, PROTOCOL_VERSION, RESPONSE_ENDPOINT } from './constants'
+export { PROTOCOL_VERSION } from './constants'
 export { IPC, IPC_SYSTEM_EVENTS } from './ipc'
 export type { IPCSystemEvents } from './ipc'
 export { Transport } from './transport'
