@@ -72,9 +72,9 @@ export class IPC {
     this.#compressor = new Compressor(this.#options.compressThreshold)
     this.#chunker = new Chunker(this.#options.chunkSize)
 
-    this.#transportUnsubscribe = this.#transport.onReceive((payload) => {
+    this.#transportUnsubscribe = this.#transport.onReceive((channel, payload) => {
       try {
-        this.#handleReceive(payload)
+        this.#handleReceive(channel, payload)
       }
       catch (e) {
         this.events.emit(IPC_SYSTEM_EVENTS.ERROR, e as Error)
@@ -310,17 +310,23 @@ export class IPC {
     const { value, compressed } = this.#compressor.compress(raw)
 
     if (value.length <= this.#options.chunkSize && !compressed) {
-      this.#transport.send(value)
+      this.#transport.send(packet.e, value)
       return
     }
 
     const chunks = this.#chunker.split(packet.id, value, compressed)
     for (const chunk of chunks) {
-      this.#transport.send(JSON.stringify(chunk))
+      this.#transport.send(packet.e, JSON.stringify(chunk))
     }
   }
 
-  #handleReceive(payload: string): void {
+  #handleReceive(channel: string, payload: string): void {
+    if (channel !== RESPONSE_ENDPOINT
+      && !this.#onHandlers.has(channel)
+      && !this.#handleHandlers.has(channel)) {
+      return
+    }
+
     const parsed = JSON.parse(payload) as Packet | Chunk
 
     if ('v' in parsed) {

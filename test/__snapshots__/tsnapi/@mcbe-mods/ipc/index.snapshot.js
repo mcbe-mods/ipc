@@ -34,7 +34,7 @@ export class IPC {
   handle(_, _) {}
   invokeImpl(_, _, _, _) {}
   sendPacket(_) {}
-  handleReceive(_) {}
+  handleReceive(_, _) {}
   handleDirectPacket(_) {}
   handleChunk(_) {}
   sendResponse(_, _) {}
@@ -42,7 +42,7 @@ export class IPC {
 export class Transport {
   id
   constructor(_) {}
-  send(_) {}
+  send(_, _) {}
   onReceive(_) {}
 }
 // #endregion

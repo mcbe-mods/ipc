@@ -84,8 +84,8 @@ export declare class IPC {
 export declare class Transport {
   #private;
   constructor(_: string);
-  send(_: string): void;
-  onReceive(_: (_: string) => void): () => void;
+  send(_: string, _: string): void;
+  onReceive(_: (_: string, _: string) => void): () => void;
 }
 // #endregion
 
