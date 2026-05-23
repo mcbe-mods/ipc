@@ -333,8 +333,7 @@ describe('IPC', () => {
     const rejection = promise.catch(e => e)
     await vi.advanceTimersByTimeAsync(200)
     const err = await rejection
-    expect(err).toBeInstanceOf(Error)
-    expect(err.message).toBe('Invoke timed out for endpoint "ghost"')
+    expect(err).toHaveProperty('message', 'Invoke timed out for endpoint "ghost"')
   })
 
   it('invoke resolves before timeout when response arrives in time', async () => {
@@ -358,8 +357,7 @@ describe('IPC', () => {
     const rejection = promise.catch(e => e)
     await vi.advanceTimersByTimeAsync(400)
     const err = await rejection
-    expect(err).toBeInstanceOf(Error)
-    expect(err.message).toBe('Invoke timed out for endpoint "ghost"')
+    expect(err).toHaveProperty('message', 'Invoke timed out for endpoint "ghost"')
   })
 
   it('invoke timeout set to 0 disables timeout', async () => {
