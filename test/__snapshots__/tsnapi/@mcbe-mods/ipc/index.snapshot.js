@@ -30,9 +30,9 @@ export class IPC {
   dispose() {}
   send(_, _, _) {}
   on(_, _, _) {}
-  invoke(_, _, _, _) {}
+  invoke(_, _, _) {}
   handle(_, _) {}
-  invokeImpl(_, _, _, _) {}
+  invokeImpl(_, _, _) {}
   sendPacket(_) {}
   handleReceive(_, _) {}
   handleDirectPacket(_) {}

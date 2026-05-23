@@ -18,8 +18,12 @@ vi.mock('@minecraft/server', () => ({
     sendScriptEvent: vi.fn((id: string, message: string) => {
       mockTransport.send(id, message)
     }),
-    runTimeout: vi.fn(),
-    clearRun: vi.fn(),
+    runTimeout: vi.fn((cb: () => void, ticks: number) => {
+      return setTimeout(cb, ticks * 50)
+    }),
+    clearRun: vi.fn((id: number) => {
+      clearTimeout(id)
+    }),
     afterEvents: {
       scriptEventReceive: {
         subscribe: vi.fn((callback: (event: any) => void) => {
