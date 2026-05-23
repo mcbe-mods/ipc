@@ -17,27 +17,30 @@ export class Transport {
   }
 
   /**
-   * Broadcast a raw string payload to all addons listening on the same namespace.
+   * Broadcast a raw string payload to all addons listening on the same namespace and channel.
+   * @param channel - The channel name to send on (appended to event ID for fast routing)
    * @param payload - The raw string to send (usually a serialized packet)
    */
-  send(payload: string): void {
-    system.sendScriptEvent(this.#id, payload)
+  send(channel: string, payload: string): void {
+    system.sendScriptEvent(`${this.#id}:${channel}`, payload)
   }
 
   /**
    * Subscribe to incoming messages from other addons.
-   * @param handler - Called with each incoming message
+   * @param handler - Called with each incoming message, pre-routed by channel
    * @returns A function that unsubscribes this handler
    */
-  onReceive(handler: (payload: string) => void): () => void {
+  onReceive(handler: (channel: string, payload: string) => void): () => void {
+    const prefix = `${this.#id}:`
     const callback = (event: { id: string, message: string, sourceType: ScriptEventSource }): void => {
       if (event.sourceType !== ScriptEventSource.Server) {
         return
       }
-      if (event.id !== this.#id) {
+      if (!event.id.startsWith(prefix)) {
         return
       }
-      handler(event.message)
+      const channel = event.id.slice(prefix.length)
+      handler(channel, event.message)
     }
 
     system.afterEvents.scriptEventReceive.subscribe(callback)

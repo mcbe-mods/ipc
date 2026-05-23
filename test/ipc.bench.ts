@@ -30,12 +30,13 @@ describe('IPC.send — fire-and-forget', () => {
 
 describe('IPC.send + on — full fire-and-forget cycle', () => {
   const ipc = new IPC({ namespace: 'cycle' })
+  ipc.on('e', () => {}) // ensure pre-filter passes through
 
   bench('small — send then simulate receive', () => {
     mockTransport.send.mockClear()
     ipc.send('e', SMALL)
     const payload = mockTransport.send.mock.calls[0][1]
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:cycle`, payload)
+    mockTransport.simulateReceive(`${IPC_NAMESPACE}:cycle:e`, payload)
   })
 
   bench('large — send (chunked) then simulate all chunks', () => {
@@ -43,7 +44,7 @@ describe('IPC.send + on — full fire-and-forget cycle', () => {
     ipc.send('e', LARGE)
     const calls = mockTransport.send.mock.calls
     for (const [, payload] of calls) {
-      mockTransport.simulateReceive(`${IPC_NAMESPACE}:cycle`, payload)
+      mockTransport.simulateReceive(`${IPC_NAMESPACE}:cycle:e`, payload)
     }
   })
 })
@@ -63,7 +64,7 @@ describe('IPC.invoke + handle — RPC round-trip', () => {
     const p = ipc.invoke<string, string>('echo', SMALL)
     const id = invokeId(mockTransport.send.mock.calls[0][1])
     const resp = JSON.stringify({ v: PROTOCOL_VERSION, id, e: RESPONSE_ENDPOINT, d: { ok: true, data: SMALL } })
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:rpc`, resp)
+    mockTransport.simulateReceive(`${IPC_NAMESPACE}:rpc:@response`, resp)
     await p
   })
 
@@ -72,7 +73,7 @@ describe('IPC.invoke + handle — RPC round-trip', () => {
     const p = ipc.invoke<string, string>('echo', MEDIUM)
     const id = invokeId(mockTransport.send.mock.calls[0][1])
     const resp = JSON.stringify({ v: PROTOCOL_VERSION, id, e: RESPONSE_ENDPOINT, d: { ok: true, data: MEDIUM } })
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:rpc`, resp)
+    mockTransport.simulateReceive(`${IPC_NAMESPACE}:rpc:@response`, resp)
     await p
   })
 
@@ -81,7 +82,7 @@ describe('IPC.invoke + handle — RPC round-trip', () => {
     const p = ipc.invoke<string, string>('echo', LARGE)
     const id = invokeId(mockTransport.send.mock.calls[0][1])
     const resp = JSON.stringify({ v: PROTOCOL_VERSION, id, e: RESPONSE_ENDPOINT, d: { ok: true, data: LARGE } })
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:rpc`, resp)
+    mockTransport.simulateReceive(`${IPC_NAMESPACE}:rpc:@response`, resp)
     await p
   })
 })
