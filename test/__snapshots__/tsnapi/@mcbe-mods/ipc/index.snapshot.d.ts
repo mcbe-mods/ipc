@@ -3,11 +3,11 @@
  */
 // #region Interfaces
 export interface Chunk {
-  i: string;
-  s: number;
-  t: number;
-  c?: 1;
-  d: string;
+  id: string;
+  seq: number;
+  total: number;
+  compressed?: true;
+  data: string;
 }
 export interface Deserializer<T> {
   deserialize: (_: string) => T;
@@ -30,10 +30,10 @@ export interface IPCSystemEvents {
   };
 }
 export interface Packet<T = unknown> {
-  v: typeof PROTOCOL_VERSION;
+  version: typeof PROTOCOL_VERSION;
   id: string;
-  e: string;
-  d: T;
+  channel: string;
+  data: T;
 }
 export interface ResponseData<T = unknown> {
   ok: true;
@@ -91,11 +91,9 @@ export declare class Transport {
 // #endregion
 
 // #region Variables
-export declare const IPC_NAMESPACE: string;
 export declare const IPC_SYSTEM_EVENTS: {
   readonly ERROR: "error";
   readonly INVALID_PACKET: "invalid-packet";
 };
 export declare const PROTOCOL_VERSION: 1;
-export declare const RESPONSE_ENDPOINT: string;
 // #endregion

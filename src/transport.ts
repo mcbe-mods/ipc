@@ -7,13 +7,13 @@
  * @see https://learn.microsoft.com/en-us/minecraft/creator/reference/content/commandsreference/examples/commands/scriptevent?view=minecraft-bedrock-stable#usage
  */
 import { ScriptEventSource, system } from '@minecraft/server'
-import { IPC_NAMESPACE } from './constants'
+import { CHANNELS } from './constants'
 
 export class Transport {
   readonly #id: string
 
   constructor(namespace: string) {
-    this.#id = `${IPC_NAMESPACE}:${namespace}`
+    this.#id = `${CHANNELS.PREFIX}:${namespace}`
   }
 
   /**

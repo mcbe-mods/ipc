@@ -57,13 +57,13 @@ export interface IPCOptions {
  */
 export interface Packet<T = unknown> {
   /** Protocol version identifier */
-  v: typeof PROTOCOL_VERSION
+  version: typeof PROTOCOL_VERSION
   /** Unique request id, used to match a response to its original invoke call */
   id: string
-  /** Endpoint name — determines which handler or listener receives this packet */
-  e: string
+  /** Channel name — determines which handler or listener receives this packet */
+  channel: string
   /** Payload — the actual data being sent */
-  d: T
+  data: T
 }
 
 /**
@@ -73,15 +73,15 @@ export interface Packet<T = unknown> {
  */
 export interface Chunk {
   /** The id of the original packet this fragment belongs to */
-  i: string
+  id: string
   /** Zero-based index of this fragment within the reassembly sequence */
-  s: number
+  seq: number
   /** Total number of fragments expected for this packet */
-  t: number
-  /** Set to `1` if the data slice is compressed with lz-string */
-  c?: 1
+  total: number
+  /** Set to `true` if the data slice is compressed with lz-string */
+  compressed?: true
   /** Raw or lz-string-compressed segment of the serialized packet */
-  d: string
+  data: string
 }
 
 /**

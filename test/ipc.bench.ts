@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { bench, describe } from 'vitest'
-import { IPC_NAMESPACE, PROTOCOL_VERSION, RESPONSE_ENDPOINT } from '../src/constants'
+import { CHANNELS, PROTOCOL_VERSION } from '../src/constants'
 import { IPC } from '../src/ipc'
 import { mockTransport } from './setup'
 
@@ -36,7 +36,7 @@ describe('IPC.send + on — full fire-and-forget cycle', () => {
     mockTransport.send.mockClear()
     ipc.send('e', SMALL)
     const payload = mockTransport.send.mock.calls[0][1]
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:cycle:e`, payload)
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:cycle:e`, payload)
   })
 
   bench('large — send (chunked) then simulate all chunks', () => {
@@ -44,7 +44,7 @@ describe('IPC.send + on — full fire-and-forget cycle', () => {
     ipc.send('e', LARGE)
     const calls = mockTransport.send.mock.calls
     for (const [, payload] of calls) {
-      mockTransport.simulateReceive(`${IPC_NAMESPACE}:cycle:e`, payload)
+      mockTransport.simulateReceive(`${CHANNELS.PREFIX}:cycle:e`, payload)
     }
   })
 })
@@ -53,18 +53,16 @@ describe('IPC.invoke + handle — RPC round-trip', () => {
   const ipc = new IPC({ namespace: 'rpc' })
   ipc.handle('echo', (d: string) => d)
 
-  // Chunk field 'i' = packet id; Packet field 'id' = packet id
   function invokeId(call: unknown): string {
-    const p = JSON.parse(call as string)
-    return p.i ?? p.id
+    return (JSON.parse(call as string) as { id: string }).id
   }
 
   bench('small (500 B — no chunk, no compress) — invoke + response', async () => {
     mockTransport.send.mockClear()
     const p = ipc.invoke<string, string>('echo', SMALL)
     const id = invokeId(mockTransport.send.mock.calls[0][1])
-    const resp = JSON.stringify({ v: PROTOCOL_VERSION, id, e: RESPONSE_ENDPOINT, d: { ok: true, data: SMALL } })
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:rpc:@response`, resp)
+    const resp = JSON.stringify({ version: PROTOCOL_VERSION, id, channel: CHANNELS.RESPONSE, data: { ok: true, data: SMALL } })
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:rpc:@response`, resp)
     await p
   })
 
@@ -72,8 +70,8 @@ describe('IPC.invoke + handle — RPC round-trip', () => {
     mockTransport.send.mockClear()
     const p = ipc.invoke<string, string>('echo', MEDIUM)
     const id = invokeId(mockTransport.send.mock.calls[0][1])
-    const resp = JSON.stringify({ v: PROTOCOL_VERSION, id, e: RESPONSE_ENDPOINT, d: { ok: true, data: MEDIUM } })
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:rpc:@response`, resp)
+    const resp = JSON.stringify({ version: PROTOCOL_VERSION, id, channel: CHANNELS.RESPONSE, data: { ok: true, data: MEDIUM } })
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:rpc:@response`, resp)
     await p
   })
 
@@ -81,8 +79,8 @@ describe('IPC.invoke + handle — RPC round-trip', () => {
     mockTransport.send.mockClear()
     const p = ipc.invoke<string, string>('echo', LARGE)
     const id = invokeId(mockTransport.send.mock.calls[0][1])
-    const resp = JSON.stringify({ v: PROTOCOL_VERSION, id, e: RESPONSE_ENDPOINT, d: { ok: true, data: LARGE } })
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:rpc:@response`, resp)
+    const resp = JSON.stringify({ version: PROTOCOL_VERSION, id, channel: CHANNELS.RESPONSE, data: { ok: true, data: LARGE } })
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:rpc:@response`, resp)
     await p
   })
 })
@@ -93,7 +91,7 @@ describe('compression ratio — payload size comparison', () => {
   bench('raw JSON vs compressed — small (500 B)', () => {
     mockTransport.send.mockClear()
     ipc.send('e', SMALL)
-    const raw = JSON.stringify({ v: PROTOCOL_VERSION, id: '', e: 'e', d: SMALL })
+    const raw = JSON.stringify({ version: PROTOCOL_VERSION, id: '', channel: 'e', data: SMALL })
     const sent = mockTransport.send.mock.calls[0][1]
     JSON.stringify({ raw: raw.length, sent: sent.length })
   })
@@ -101,7 +99,7 @@ describe('compression ratio — payload size comparison', () => {
   bench('raw JSON vs compressed — medium (5 KB)', () => {
     mockTransport.send.mockClear()
     ipc.send('e', MEDIUM)
-    const raw = JSON.stringify({ v: PROTOCOL_VERSION, id: '', e: 'e', d: MEDIUM })
+    const raw = JSON.stringify({ version: PROTOCOL_VERSION, id: '', channel: 'e', data: MEDIUM })
     const calls = mockTransport.send.mock.calls
     let sentLen = 0
     for (const [, payload] of calls) {
@@ -113,7 +111,7 @@ describe('compression ratio — payload size comparison', () => {
   bench('raw JSON vs compressed — large (26 KB)', () => {
     mockTransport.send.mockClear()
     ipc.send('e', LARGE)
-    const raw = JSON.stringify({ v: PROTOCOL_VERSION, id: '', e: 'e', d: LARGE })
+    const raw = JSON.stringify({ version: PROTOCOL_VERSION, id: '', channel: 'e', data: LARGE })
     const calls = mockTransport.send.mock.calls
     let sentLen = 0
     for (const [, payload] of calls) {

@@ -35,13 +35,13 @@ export class Chunker {
 
     for (let i = 0; i < total; i++) {
       const chunk: Chunk = {
-        i: id,
-        s: i,
-        t: total,
-        d: data.slice(i * this.#chunkSize, (i + 1) * this.#chunkSize),
+        id,
+        seq: i,
+        total,
+        data: data.slice(i * this.#chunkSize, (i + 1) * this.#chunkSize),
       }
       if (compressed) {
-        chunk.c = 1
+        chunk.compressed = true
       }
       chunks.push(chunk)
     }
@@ -57,31 +57,31 @@ export class Chunker {
   assemble(
     chunk: Chunk,
   ): { done: false } | { done: true, data: string, compressed: boolean } {
-    if (chunk.t <= 0) {
+    if (chunk.total <= 0) {
       return { done: false }
     }
 
-    let pending = this.#buffer.get(chunk.i)
+    let pending = this.#buffer.get(chunk.id)
 
     if (!pending) {
       pending = {
         fragments: [],
         received: 0,
-        total: chunk.t,
-        compressed: chunk.c === 1,
+        total: chunk.total,
+        compressed: chunk.compressed === true,
       }
-      this.#buffer.set(chunk.i, pending)
+      this.#buffer.set(chunk.id, pending)
     }
 
-    if (pending.fragments[chunk.s] !== undefined) {
+    if (pending.fragments[chunk.seq] !== undefined) {
       return { done: false }
     }
 
-    pending.fragments[chunk.s] = chunk.d
+    pending.fragments[chunk.seq] = chunk.data
     pending.received++
 
     if (pending.received === pending.total) {
-      this.#buffer.delete(chunk.i)
+      this.#buffer.delete(chunk.id)
       return { done: true, data: pending.fragments.join(''), compressed: pending.compressed }
     }
 

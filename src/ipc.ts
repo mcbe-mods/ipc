@@ -13,7 +13,7 @@ import { system } from '@minecraft/server'
 import { EventEmitter } from 'mini-emit'
 import { Chunker } from './chunk'
 import { Compressor } from './compress'
-import { PROTOCOL_VERSION, RESPONSE_ENDPOINT, RESPONSE_EVENT_PREFIX } from './constants'
+import { CHANNELS, PROTOCOL_VERSION, RESPONSE_EVENT_PREFIX } from './constants'
 import { Transport } from './transport'
 
 const DEFAULT_OPTIONS: Required<IPCOptions> = {
@@ -99,9 +99,9 @@ export class IPC {
   }
 
   /**
-   * Fire-and-forget: send data to an endpoint without expecting a response.
+   * Fire-and-forget: send data to a channel without expecting a response.
    * Use {@link on} on the receiving side to listen for these messages.
-   * @param endpoint - The endpoint name
+   * @param channel - The channel name
    * @param data - The data to send. If using a custom serializer, this is the typed value.
    * @example
    * ```ts
@@ -116,23 +116,23 @@ export class IPC {
    * ipc.send('notify', mySerializer, { message: 'hello' })
    * ```
    */
-  send(endpoint: string): void
-  send<T>(endpoint: string, data: NoInfer<T>): void
-  send<T>(endpoint: string, serializer: Serializer<T>, data: NoInfer<T>): void
-  send<T = never>(endpoint: string, serializerOrData?: Serializer<T> | T, data?: T): void {
+  send(channel: string): void
+  send<T>(channel: string, data: NoInfer<T>): void
+  send<T>(channel: string, serializer: Serializer<T>, data: NoInfer<T>): void
+  send<T = never>(channel: string, serializerOrData?: Serializer<T> | T, data?: T): void {
     const id = generateId()
     const d = data !== undefined
       ? (serializerOrData as Serializer<T>).serialize(data as T)
       : (serializerOrData as T)
-    const packet: Packet = { v: PROTOCOL_VERSION, id, e: endpoint, d }
+    const packet: Packet = { version: PROTOCOL_VERSION, id, channel, data: d }
     this.#sendPacket(packet)
   }
 
   /**
-   * Register a listener for fire-and-forget messages on an endpoint.
+   * Register a listener for fire-and-forget messages on a channel.
    * Paired with {@link send} on the other side.
    * Returns an unsubscribe function.
-   * @param endpoint - The endpoint name to listen on
+   * @param channel - The channel name to listen on
    * @param handler - Called with the deserialized data each time a message arrives
    * @returns A function that unsubscribes this listener
    * @example
@@ -149,10 +149,10 @@ export class IPC {
    * })
    * ```
    */
-  on<T>(endpoint: string, handler: (data: T) => void): () => void
-  on<T>(endpoint: string, deserializer: Deserializer<T>, handler: (data: T) => void): () => void
+  on<T>(channel: string, handler: (data: T) => void): () => void
+  on<T>(channel: string, deserializer: Deserializer<T>, handler: (data: T) => void): () => void
   on<T>(
-    endpoint: string,
+    channel: string,
     deserializerOrHandler: Deserializer<T> | ((data: T) => void),
     handler?: (data: T) => void,
   ): () => void {
@@ -174,17 +174,17 @@ export class IPC {
       userHandler(data)
     }
 
-    let handlers = this.#onHandlers.get(endpoint)
+    let handlers = this.#onHandlers.get(channel)
     if (!handlers) {
       handlers = new Set()
-      this.#onHandlers.set(endpoint, handlers)
+      this.#onHandlers.set(channel, handlers)
     }
     handlers.add(wrapped)
 
     return () => {
       handlers!.delete(wrapped)
       if (handlers!.size === 0) {
-        this.#onHandlers.delete(endpoint)
+        this.#onHandlers.delete(channel)
       }
     }
   }
@@ -194,7 +194,7 @@ export class IPC {
    * Must be paired with {@link handle} on the receiving side.
    * The returned promise resolves with the handler's return value or rejects if
    * no handler is registered or the handler throws.
-   * @param endpoint - The endpoint name to invoke
+   * @param channel - The channel name to invoke
    * @param data - The data to send to the handler
    * @param options - Optional settings (timeout, serializer, deserializer)
    * @returns A promise that resolves with the handler's return value
@@ -215,34 +215,34 @@ export class IPC {
    * const result = await ipc.invoke('calc', data, { serializer: mySer, deserializer: myDeser })
    * ```
    */
-  invoke<R = unknown>(endpoint: string): Promise<R>
-  invoke<R = unknown>(endpoint: string, options: InvokeOptions<never, R>): Promise<R>
-  invoke<T = never, R = unknown>(endpoint: string, data: T, options?: InvokeOptions<T, R>): Promise<R>
+  invoke<R = unknown>(channel: string): Promise<R>
+  invoke<R = unknown>(channel: string, options: InvokeOptions<never, R>): Promise<R>
+  invoke<T = never, R = unknown>(channel: string, data: T, options?: InvokeOptions<T, R>): Promise<R>
   invoke<T = never, R = unknown>(
-    endpoint: string,
+    channel: string,
     dataOrOptions?: T | InvokeOptions<never, R>,
     options?: InvokeOptions<T, R>,
   ): Promise<R> {
     if (dataOrOptions === undefined) {
-      return this.#invokeImpl(endpoint)
+      return this.#invokeImpl(channel)
     }
 
     if (isInvokeOptions(dataOrOptions)) {
-      return this.#invokeImpl(endpoint, undefined, dataOrOptions)
+      return this.#invokeImpl(channel, undefined, dataOrOptions)
     }
 
-    return this.#invokeImpl(endpoint, dataOrOptions as T, options)
+    return this.#invokeImpl(channel, dataOrOptions as T, options)
   }
 
   /**
-   * Register a responder for an endpoint.
+   * Register a responder for a channel.
    * Must be paired with {@link invoke} on the other side.
    * The handler can return a value or a Promise. Throwing will cause the invoke to reject.
-   * Only one handler can be registered per endpoint — duplicate registration throws.
-   * @param endpoint - The endpoint name to handle
+   * Only one handler can be registered per channel — duplicate registration throws.
+   * @param channel - The channel name to handle
    * @param handler - Called with the deserialized data when an invoke arrives. Return a value or a Promise.
    * @returns A function that unregisters this handler
-   * @throws {Error} If a handler is already registered for this endpoint
+   * @throws {Error} If a handler is already registered for this channel
    * @example
    * ```ts
    * const off = ipc.handle<{ x: number }, { y: string }>('calc', async (req) => {
@@ -252,28 +252,28 @@ export class IPC {
    * ```
    */
   handle<T, R>(
-    endpoint: string,
+    channel: string,
     handler: (data: T) => R | Promise<R>,
   ): () => void {
-    if (this.#handleHandlers.has(endpoint)) {
-      throw new Error(`Handler already registered for endpoint "${endpoint}"`)
+    if (this.#handleHandlers.has(channel)) {
+      throw new Error(`Handler already registered for channel "${channel}"`)
     }
 
-    this.#handleHandlers.set(endpoint, handler as (data: unknown) => unknown | Promise<unknown>)
+    this.#handleHandlers.set(channel, handler as (data: unknown) => unknown | Promise<unknown>)
 
     return () => {
-      this.#handleHandlers.delete(endpoint)
+      this.#handleHandlers.delete(channel)
     }
   }
 
   #invokeImpl<T, R>(
-    endpoint: string,
+    channel: string,
     data?: T,
     options?: InvokeOptions<T, R>,
   ): Promise<R> {
     const id = generateId()
     const d = options?.serializer ? options.serializer.serialize(data as T) : data
-    const packet: Packet = { v: PROTOCOL_VERSION, id, e: endpoint, d }
+    const packet: Packet = { version: PROTOCOL_VERSION, id, channel, data: d }
     const timeout = options?.timeout ?? this.#options.invokeTimeout
 
     return new Promise<R>((resolve, reject) => {
@@ -312,7 +312,7 @@ export class IPC {
             return
           settled = true
           this.#sentIds.delete(id)
-          reject(new Error(`Invoke timed out for endpoint "${endpoint}"`))
+          reject(new Error(`Invoke timed out for channel "${channel}"`))
         }, ticks)
       }
 
@@ -332,18 +332,18 @@ export class IPC {
     const { value, compressed } = this.#compressor.compress(raw)
 
     if (value.length <= this.#options.chunkSize && !compressed) {
-      this.#transport.send(packet.e, value)
+      this.#transport.send(packet.channel, value)
       return
     }
 
     const chunks = this.#chunker.split(packet.id, value, compressed)
     for (const chunk of chunks) {
-      this.#transport.send(packet.e, JSON.stringify(chunk))
+      this.#transport.send(packet.channel, JSON.stringify(chunk))
     }
   }
 
   #handleReceive(channel: string, payload: string): void {
-    if (channel !== RESPONSE_ENDPOINT
+    if (channel !== CHANNELS.RESPONSE
       && !this.#onHandlers.has(channel)
       && !this.#handleHandlers.has(channel)) {
       return
@@ -351,10 +351,10 @@ export class IPC {
 
     const parsed = JSON.parse(payload) as Packet | Chunk
 
-    if ('v' in parsed) {
+    if ('version' in parsed) {
       this.#handleDirectPacket(parsed as Packet)
     }
-    else if ('i' in parsed) {
+    else if ('seq' in parsed) {
       this.#handleChunk(parsed as Chunk)
     }
     else {
@@ -363,10 +363,10 @@ export class IPC {
   }
 
   #handleDirectPacket(packet: Packet): void {
-    const { e: endpoint, d: data, id } = packet
+    const { channel, data, id } = packet
 
     // Response from an invoke — resolve/reject the pending promise by id
-    if (endpoint === RESPONSE_ENDPOINT) {
+    if (channel === CHANNELS.RESPONSE) {
       this.#responses.emit(`${RESPONSE_EVENT_PREFIX}${id}`, data)
       return
     }
@@ -379,7 +379,7 @@ export class IPC {
     }
 
     // Handle request — execute the registered responder and send back the result
-    const handleHandler = this.#handleHandlers.get(endpoint)
+    const handleHandler = this.#handleHandlers.get(channel)
     if (handleHandler) {
       Promise.resolve()
         .then(() => handleHandler(data))
@@ -393,7 +393,7 @@ export class IPC {
     }
 
     // Fire-and-forget — forward to all on() listeners
-    const onHandlers = this.#onHandlers.get(endpoint)
+    const onHandlers = this.#onHandlers.get(channel)
     if (onHandlers) {
       for (const handler of onHandlers) {
         try {
@@ -407,7 +407,7 @@ export class IPC {
     }
 
     // No handler registered — notify the caller so invoke() doesn't hang
-    this.#sendResponse(id, { ok: false, err: `No handler registered for "${endpoint}"` })
+    this.#sendResponse(id, { ok: false, err: `No handler registered for "${channel}"` })
   }
 
   #handleChunk(chunk: Chunk): void {
@@ -420,7 +420,7 @@ export class IPC {
         packet = JSON.parse(raw) as Packet
       }
       catch {
-        this.events.emit(IPC_SYSTEM_EVENTS.ERROR, new Error(`Failed to parse reassembled packet for chunk ${chunk.i}`))
+        this.events.emit(IPC_SYSTEM_EVENTS.ERROR, new Error(`Failed to parse reassembled packet for chunk ${chunk.id}`))
         return
       }
       this.#handleDirectPacket(packet)
@@ -429,10 +429,10 @@ export class IPC {
 
   #sendResponse(id: string, data: ResponseData | ErrorResponseData): void {
     const packet: Packet = {
-      v: PROTOCOL_VERSION,
+      version: PROTOCOL_VERSION,
       id,
-      e: RESPONSE_ENDPOINT,
-      d: data,
+      channel: CHANNELS.RESPONSE,
+      data,
     }
     this.#sendPacket(packet)
   }

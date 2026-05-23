@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { IPC_NAMESPACE, PROTOCOL_VERSION, RESPONSE_ENDPOINT } from '../src/constants'
+import { CHANNELS, PROTOCOL_VERSION } from '../src/constants'
 import { IPC, IPC_SYSTEM_EVENTS } from '../src/ipc'
 import { mockTransport } from './setup'
 
@@ -21,20 +21,20 @@ describe('IPC', () => {
 
     expect(mockTransport.send).toHaveBeenCalledTimes(1)
     const [id, payload] = mockTransport.send.mock.calls[0]
-    expect(id).toBe(`${IPC_NAMESPACE}:test:ping`)
+    expect(id).toBe(`${CHANNELS.PREFIX}:test:ping`)
 
     const parsed = JSON.parse(payload)
-    expect(parsed.v).toBe(1)
-    expect(parsed.e).toBe('ping')
-    expect(parsed.d).toEqual({ msg: 'hello' })
+    expect(parsed.version).toBe(1)
+    expect(parsed.channel).toBe('ping')
+    expect(parsed.data).toEqual({ msg: 'hello' })
   })
 
   it('receives a direct packet via on()', () => {
     const handler = vi.fn()
     ipc.on<{ msg: string }>('ping', handler)
 
-    const packet = JSON.stringify({ v: PROTOCOL_VERSION, id: 'ABC123', e: 'ping', d: { msg: 'hello' } })
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test:ping`, packet)
+    const packet = JSON.stringify({ version: PROTOCOL_VERSION, id: 'ABC123', channel: 'ping', data: { msg: 'hello' } })
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:test:ping`, packet)
 
     expect(handler).toHaveBeenCalledTimes(1)
     expect(handler).toHaveBeenCalledWith({ msg: 'hello' })
@@ -46,7 +46,7 @@ describe('IPC', () => {
     ipc.on('test', h1)
     ipc.on('test', h2)
 
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test:test`, JSON.stringify({ v: PROTOCOL_VERSION, id: 'X', e: 'test', d: 42 }))
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:test:test`, JSON.stringify({ version: PROTOCOL_VERSION, id: 'X', channel: 'test', data: 42 }))
 
     expect(h1).toHaveBeenCalledWith(42)
     expect(h2).toHaveBeenCalledWith(42)
@@ -57,7 +57,7 @@ describe('IPC', () => {
     const off = ipc.on('test', handler)
     off()
 
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test:test`, JSON.stringify({ v: PROTOCOL_VERSION, id: 'X', e: 'test', d: 42 }))
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:test:test`, JSON.stringify({ version: PROTOCOL_VERSION, id: 'X', channel: 'test', data: 42 }))
     expect(handler).not.toHaveBeenCalled()
   })
 
@@ -74,12 +74,12 @@ describe('IPC', () => {
 
     // Simulate response arriving back
     const responsePacket = JSON.stringify({
-      v: PROTOCOL_VERSION,
+      version: PROTOCOL_VERSION,
       id: sentPacket.id,
-      e: RESPONSE_ENDPOINT,
-      d: { ok: true, data: { y: '42' } },
+      channel: CHANNELS.RESPONSE,
+      data: { ok: true, data: { y: '42' } },
     })
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test:@response`, responsePacket)
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:test:@response`, responsePacket)
 
     const result = await promise
     expect(result).toEqual({ y: '42' })
@@ -91,8 +91,8 @@ describe('IPC', () => {
     })
 
     // Simulate incoming invoke request
-    const reqPacket = JSON.stringify({ v: PROTOCOL_VERSION, id: 'REQ1', e: 'fail', d: {} })
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test:fail`, reqPacket)
+    const reqPacket = JSON.stringify({ version: PROTOCOL_VERSION, id: 'REQ1', channel: 'fail', data: {} })
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:test:fail`, reqPacket)
 
     // Let microtasks settle
     await vi.runAllTimersAsync()
@@ -102,10 +102,10 @@ describe('IPC', () => {
     if (lastCall) {
       const parsed = JSON.parse(lastCall)
       // Could be chunk-wrapped or direct
-      const inner = parsed.v ? parsed : JSON.parse(parsed.d || '{}')
-      if (inner.e === RESPONSE_ENDPOINT) {
-        expect(inner.d.ok).toBe(false)
-        expect(inner.d.err).toBe('Error: oops')
+      const inner = parsed.version ? parsed : JSON.parse(parsed.data || '{}')
+      if (inner.channel === CHANNELS.RESPONSE) {
+        expect(inner.data.ok).toBe(false)
+        expect(inner.data.err).toBe('Error: oops')
       }
     }
   })
@@ -121,13 +121,13 @@ describe('IPC', () => {
 
     // All should use the ipc:test:big ID
     for (const [id] of mockTransport.send.mock.calls) {
-      expect(id).toBe(`${IPC_NAMESPACE}:test:big`)
+      expect(id).toBe(`${CHANNELS.PREFIX}:test:big`)
     }
 
     // First call should be a chunk (has 'i' field)
     const firstPayload = JSON.parse(mockTransport.send.mock.calls[0][1])
-    expect(firstPayload.i).toBeDefined()
-    expect(firstPayload.s).toBe(0)
+    expect(firstPayload.id).toBeDefined()
+    expect(firstPayload.seq).toBe(0)
   })
 
   it('reassembles chunked payloads', () => {
@@ -135,7 +135,7 @@ describe('IPC', () => {
     ipc.on<{ data: string }>('big', handler)
 
     // Simulate a chunked packet
-    const packet = JSON.stringify({ v: PROTOCOL_VERSION, id: 'CHUNKID', e: 'big', d: { data: 'hello' } })
+    const packet = JSON.stringify({ version: PROTOCOL_VERSION, id: 'CHUNKID', channel: 'big', data: { data: 'hello' } })
     const compressed = packet // not compressing for test simplicity
 
     // Manually chunk at 10 chars
@@ -146,8 +146,8 @@ describe('IPC', () => {
 
     // Send chunks
     for (let i = 0; i < chunks.length; i++) {
-      const chunk = JSON.stringify({ i: 'CHUNKID', s: i, t: chunks.length, d: chunks[i] })
-      mockTransport.simulateReceive(`${IPC_NAMESPACE}:test:big`, chunk)
+      const chunk = JSON.stringify({ id: 'CHUNKID', seq: i, total: chunks.length, data: chunks[i] })
+      mockTransport.simulateReceive(`${CHANNELS.PREFIX}:test:big`, chunk)
     }
 
     expect(handler).toHaveBeenCalledTimes(1)
@@ -159,8 +159,8 @@ describe('IPC', () => {
     ipc.events.on('error', errorHandler)
     ipc.on('dummy', () => {}) // register listener so pre-filter passes
 
-    const chunk = JSON.stringify({ i: 'BADID', s: 0, t: 1, d: 'not-json!!' })
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test:dummy`, chunk)
+    const chunk = JSON.stringify({ id: 'BADID', seq: 0, total: 1, data: 'not-json!!' })
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:test:dummy`, chunk)
 
     expect(errorHandler).toHaveBeenCalled()
   })
@@ -173,7 +173,7 @@ describe('IPC', () => {
 
     const payload = mockTransport.send.mock.calls[0][1]
     const parsed = JSON.parse(payload)
-    expect(parsed.d).toBe('num:42')
+    expect(parsed.data).toBe('num:42')
   })
 
   it('supports custom deserializer in on()', () => {
@@ -183,8 +183,8 @@ describe('IPC', () => {
     const handler = vi.fn()
     ipc.on('custom', customDeserializer, handler)
 
-    const packet = JSON.stringify({ v: PROTOCOL_VERSION, id: 'X', e: 'custom', d: 'num:42' })
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test:custom`, packet)
+    const packet = JSON.stringify({ version: PROTOCOL_VERSION, id: 'X', channel: 'custom', data: 'num:42' })
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:test:custom`, packet)
 
     expect(handler).toHaveBeenCalledWith(42)
   })
@@ -209,12 +209,12 @@ describe('IPC', () => {
     const sentPayload = mockTransport.send.mock.calls[0][1]
     const sentPacket = JSON.parse(sentPayload)
     const responsePacket = JSON.stringify({
-      v: PROTOCOL_VERSION,
+      version: PROTOCOL_VERSION,
       id: sentPacket.id,
-      e: RESPONSE_ENDPOINT,
-      d: { ok: false, err: 'No handler registered for "ghost"' },
+      channel: CHANNELS.RESPONSE,
+      data: { ok: false, err: 'No handler registered for "ghost"' },
     })
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test:@response`, responsePacket)
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:test:@response`, responsePacket)
 
     await expect(promise).rejects.toThrow('No handler registered for "ghost"')
   })
@@ -230,11 +230,11 @@ describe('IPC', () => {
 
     // Simulate packet arriving on ipc:test:ping (sender's namespace)
     // ipc2 listens on ipc:ns2, so it should NOT receive this
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test:ping`, sentPayload)
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:test:ping`, sentPayload)
     expect(handler).not.toHaveBeenCalled()
 
     // Simulate packet arriving on ipc:ns2:ping — ipc2 SHOULD receive it
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:ns2:ping`, sentPayload)
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:ns2:ping`, sentPayload)
     expect(handler).toHaveBeenCalledTimes(1)
     expect(handler).toHaveBeenCalledWith({ msg: 'hello' })
   })
@@ -250,13 +250,13 @@ describe('IPC', () => {
     const sentPayload = mockTransport.send.mock.lastCall?.[1]
 
     // Simulate on ns2's namespace — ipc2 should NOT handle
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:ns2:ping`, sentPayload)
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:ns2:ping`, sentPayload)
     expect(handler).not.toHaveBeenCalled()
 
-    // No RESPONSE_ENDPOINT should have been sent from ipc2 back
+    // No CHANNELS.RESPONSE should have been sent from ipc2 back
     for (const [, payload] of mockTransport.send.mock.calls) {
       const parsed = JSON.parse(payload)
-      expect(parsed.e).not.toBe(RESPONSE_ENDPOINT)
+      expect(parsed.channel).not.toBe(CHANNELS.RESPONSE)
     }
   })
 
@@ -269,16 +269,16 @@ describe('IPC', () => {
     const sentPacket = JSON.parse(sentPayload)
 
     // Simulate loopback: invoke packet returns to sender
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test:echo`, JSON.stringify(sentPacket))
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:test:echo`, JSON.stringify(sentPacket))
 
     // Simulate normal response from the other side
     const responsePacket = JSON.stringify({
-      v: PROTOCOL_VERSION,
+      version: PROTOCOL_VERSION,
       id: sentPacket.id,
-      e: RESPONSE_ENDPOINT,
-      d: { ok: true, data: 'echo:hello' },
+      channel: CHANNELS.RESPONSE,
+      data: { ok: true, data: 'echo:hello' },
     })
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test:@response`, responsePacket)
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:test:@response`, responsePacket)
 
     await expect(promise).resolves.toBe('echo:hello')
   })
@@ -293,17 +293,17 @@ describe('IPC', () => {
     const sentPacket = JSON.parse(sentPayload)
 
     // Simulate loopback — handle() should NOT be triggered
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test:test`, JSON.stringify(sentPacket))
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:test:test`, JSON.stringify(sentPacket))
     expect(handler).not.toHaveBeenCalled()
 
     // Resolve with a response from "the other side"
     const responsePacket = JSON.stringify({
-      v: PROTOCOL_VERSION,
+      version: PROTOCOL_VERSION,
       id: sentPacket.id,
-      e: RESPONSE_ENDPOINT,
-      d: { ok: true, data: 'ok' },
+      channel: CHANNELS.RESPONSE,
+      data: { ok: true, data: 'ok' },
     })
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test:@response`, responsePacket)
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:test:@response`, responsePacket)
     await expect(promise).resolves.toBe('ok')
   })
 
@@ -312,7 +312,7 @@ describe('IPC', () => {
     ipc.on('test', handler)
     ipc.dispose()
 
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test:test`, JSON.stringify({ v: PROTOCOL_VERSION, id: 'X', e: 'test', d: 42 }))
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:test:test`, JSON.stringify({ version: PROTOCOL_VERSION, id: 'X', channel: 'test', data: 42 }))
 
     expect(handler).not.toHaveBeenCalled()
   })
@@ -322,7 +322,7 @@ describe('IPC', () => {
     ipc.events.on(IPC_SYSTEM_EVENTS.INVALID_PACKET, handler)
     ipc.on('dummy', () => {}) // register listener so pre-filter passes
 
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test:dummy`, JSON.stringify({ foo: 'bar' }))
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:test:dummy`, JSON.stringify({ foo: 'bar' }))
 
     expect(handler).toHaveBeenCalledTimes(1)
     expect(handler).toHaveBeenCalledWith({ payload: JSON.stringify({ foo: 'bar' }) })
@@ -333,7 +333,7 @@ describe('IPC', () => {
     const rejection = promise.catch(e => e)
     await vi.advanceTimersByTimeAsync(200)
     const err = await rejection
-    expect(err).toHaveProperty('message', 'Invoke timed out for endpoint "ghost"')
+    expect(err).toHaveProperty('message', 'Invoke timed out for channel "ghost"')
   })
 
   it('invoke resolves before timeout when response arrives in time', async () => {
@@ -341,11 +341,11 @@ describe('IPC', () => {
     const promise = ipc.invoke('fast', { timeout: 5000 })
 
     const sent = JSON.parse(mockTransport.send.mock.calls[0][1])
-    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test:@response`, JSON.stringify({
-      v: PROTOCOL_VERSION,
+    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:test:@response`, JSON.stringify({
+      version: PROTOCOL_VERSION,
       id: sent.id,
-      e: RESPONSE_ENDPOINT,
-      d: { ok: true, data: 'pong' },
+      channel: CHANNELS.RESPONSE,
+      data: { ok: true, data: 'pong' },
     }))
 
     await expect(promise).resolves.toBe('pong')
@@ -357,7 +357,7 @@ describe('IPC', () => {
     const rejection = promise.catch(e => e)
     await vi.advanceTimersByTimeAsync(400)
     const err = await rejection
-    expect(err).toHaveProperty('message', 'Invoke timed out for endpoint "ghost"')
+    expect(err).toHaveProperty('message', 'Invoke timed out for channel "ghost"')
   })
 
   it('invoke timeout set to 0 disables timeout', async () => {
