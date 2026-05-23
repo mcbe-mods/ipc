@@ -44,6 +44,19 @@ ipc.handle<Req, Res>('inv.get', (req) => {
 })
 ```
 
+### Timeout
+
+```ts
+// Per-call: reject after 5 seconds if no response
+const res = await ipc.invoke('ping', data, { timeout: 5000 })
+
+// Global default: all invocations use 30s timeout (configurable)
+const ipc = new IPC({ invokeTimeout: 10_000 })
+
+// Disable timeout entirely
+const res = await ipc.invoke('ping', data, { timeout: 0 })
+```
+
 ### Cancel subscription
 
 ```ts
@@ -66,9 +79,19 @@ import type { Deserializer, Serializer } from '@mcbe-mods/ipc'
 const mySer: Serializer<MyType> = { serialize: v => JSON.stringify(v) }
 const myDeser: Deserializer<MyType> = { deserialize: s => JSON.parse(s) }
 
+// Fire-and-forget with serializer
 ipc.send('channel', mySer, data)
+
+// Receive with deserializer
 ipc.on('channel', myDeser, (data) => {
   // ...
+})
+
+// RPC with serializer/deserializer via InvokeOptions
+const res = await ipc.invoke('calc', data, {
+  serializer: mySer,
+  deserializer: myDeser,
+  timeout: 5000,
 })
 ```
 
@@ -103,6 +126,12 @@ interface IPCOptions {
    * @default 1_000_000
    */
   maxPacketSize?: number
+  /**
+   * Default timeout for invoke() in milliseconds.
+   * Set to 0 to disable. Per-call override via InvokeOptions.
+   * @default 30_000
+   */
+  invokeTimeout?: number
 }
 ```
 
