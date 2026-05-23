@@ -2,12 +2,14 @@ import type {
   Chunk,
   Deserializer,
   ErrorResponseData,
+  InvokeOptions,
   IPCOptions,
   Packet,
   ResponseData,
   Serializer,
 } from './types'
 
+import { system } from '@minecraft/server'
 import { EventEmitter } from 'mini-emit'
 import { Chunker } from './chunk'
 import { Compressor } from './compress'
@@ -19,6 +21,7 @@ const DEFAULT_OPTIONS: Required<IPCOptions> = {
   chunkSize: 1800,
   compressThreshold: 800,
   maxPacketSize: 1_000_000,
+  invokeTimeout: 30_000,
 }
 
 /**
@@ -193,6 +196,7 @@ export class IPC {
    * no handler is registered or the handler throws.
    * @param endpoint - The endpoint name to invoke
    * @param data - The data to send to the handler
+   * @param options - Optional settings (timeout, serializer, deserializer)
    * @returns A promise that resolves with the handler's return value
    * @example
    * ```ts
@@ -200,39 +204,34 @@ export class IPC {
    * ```
    * @example
    * ```ts
-   * const result = await ipc.invoke('calc', mySerializer, myDeserializer, data)
+   * const result = await ipc.invoke('calc', { x: 21 }, { timeout: 5000 })
    * ```
    * @example
    * ```ts
    * const result = await ipc.invoke<string>('ping')
    * ```
+   * @example
+   * ```ts
+   * const result = await ipc.invoke('calc', data, { serializer: mySer, deserializer: myDeser })
+   * ```
    */
   invoke<R = unknown>(endpoint: string): Promise<R>
-  invoke<T = unknown, R = unknown>(endpoint: string, data: T): Promise<R>
-  invoke<T = unknown, R = unknown>(
-    endpoint: string,
-    serializer: Serializer<T>,
-    deserializer: Deserializer<R>,
-    data: T,
-  ): Promise<R>
+  invoke<R = unknown>(endpoint: string, options: InvokeOptions<never, R>): Promise<R>
+  invoke<T = never, R = unknown>(endpoint: string, data: T, options?: InvokeOptions<T, R>): Promise<R>
   invoke<T = never, R = unknown>(
     endpoint: string,
-    serializerOrData?: Serializer<T> | T,
-    deserializer?: Deserializer<R>,
-    data?: T,
+    dataOrOptions?: T | InvokeOptions<never, R>,
+    options?: InvokeOptions<T, R>,
   ): Promise<R> {
-    let serializer: Serializer<T> | undefined
-    let value: T
-
-    if (data !== undefined) {
-      serializer = serializerOrData as Serializer<T>
-      value = data as T
-    }
-    else {
-      value = serializerOrData as T
+    if (dataOrOptions === undefined) {
+      return this.#invokeImpl(endpoint)
     }
 
-    return this.#invokeImpl(endpoint, value, serializer, deserializer)
+    if (isInvokeOptions(dataOrOptions)) {
+      return this.#invokeImpl(endpoint, undefined, dataOrOptions)
+    }
+
+    return this.#invokeImpl(endpoint, dataOrOptions as T, options)
   }
 
   /**
@@ -269,23 +268,35 @@ export class IPC {
 
   #invokeImpl<T, R>(
     endpoint: string,
-    data: T,
-    serializer?: Serializer<T>,
-    deserializer?: Deserializer<R>,
+    data?: T,
+    options?: InvokeOptions<T, R>,
   ): Promise<R> {
     const id = generateId()
-    const d = serializer ? serializer.serialize(data) : data
+    const d = options?.serializer ? options.serializer.serialize(data as T) : data
     const packet: Packet = { v: PROTOCOL_VERSION, id, e: endpoint, d }
+    const timeout = options?.timeout ?? this.#options.invokeTimeout
 
     return new Promise<R>((resolve, reject) => {
+      let settled = false
+      let timeoutId: number | undefined
+
+      const cleanup = (): void => {
+        if (settled)
+          return
+        settled = true
+        if (timeoutId !== undefined)
+          system.clearRun(timeoutId)
+      }
+
       this.#sentIds.add(id)
 
       this.#responses.once(`${RESPONSE_EVENT_PREFIX}${id}`, (response: unknown) => {
+        cleanup()
         this.#sentIds.delete(id)
         const resp = response as ResponseData<R> | ErrorResponseData
         if (resp.ok) {
-          const r = deserializer
-            ? deserializer.deserialize(resp.data as unknown as string)
+          const r = options?.deserializer
+            ? options.deserializer.deserialize(resp.data as unknown as string)
             : (resp.data as R)
           resolve(r)
         }
@@ -293,6 +304,17 @@ export class IPC {
           reject(new Error((resp as ErrorResponseData).err))
         }
       })
+
+      if (timeout > 0) {
+        const ticks = Math.ceil(timeout / 50)
+        timeoutId = system.runTimeout(() => {
+          if (settled)
+            return
+          settled = true
+          this.#sentIds.delete(id)
+          reject(new Error(`Invoke timed out for endpoint "${endpoint}"`))
+        }, ticks)
+      }
 
       this.#sendPacket(packet)
     })
@@ -414,4 +436,9 @@ export class IPC {
     }
     this.#sendPacket(packet)
   }
+}
+
+function isInvokeOptions(obj: unknown): obj is InvokeOptions {
+  return typeof obj === 'object' && obj !== null
+    && ('timeout' in obj || 'serializer' in obj || 'deserializer' in obj)
 }

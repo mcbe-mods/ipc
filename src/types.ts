@@ -12,6 +12,20 @@ export interface Deserializer<T> {
   deserialize: (data: string) => T
 }
 
+/**
+ * Per-call options for {@link IPC.invoke}.
+ * @template T - The request data type
+ * @template R - The response data type
+ */
+export interface InvokeOptions<T = never, R = unknown> {
+  /** Timeout in milliseconds. Falls back to {@link IPCOptions.invokeTimeout}. 0 disables timeout. */
+  timeout?: number
+  /** Custom serializer for the request data */
+  serializer?: Serializer<T>
+  /** Custom deserializer for the response data */
+  deserializer?: Deserializer<R>
+}
+
 /** Options for creating an IPC instance */
 export interface IPCOptions {
   /** Namespace used for script events: `ipc:<namespace>`. All addons sharing the same namespace can communicate. @default 'global' */
@@ -32,6 +46,8 @@ export interface IPCOptions {
   compressThreshold?: number
   /** Maximum allowed serialized packet size in characters. Throws if exceeded. @default 1_000_000 */
   maxPacketSize?: number
+  /** Default timeout for {@link IPC.invoke} in milliseconds. 0 disables timeout. @default 30_000 */
+  invokeTimeout?: number
 }
 
 /**

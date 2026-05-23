@@ -327,4 +327,47 @@ describe('IPC', () => {
     expect(handler).toHaveBeenCalledTimes(1)
     expect(handler).toHaveBeenCalledWith({ payload: JSON.stringify({ foo: 'bar' }) })
   })
+
+  it('invoke times out with per-call timeout', async () => {
+    const promise = ipc.invoke('ghost', { timeout: 100 })
+    const rejection = promise.catch(e => e)
+    await vi.advanceTimersByTimeAsync(200)
+    const err = await rejection
+    expect(err).toBeInstanceOf(Error)
+    expect(err.message).toBe('Invoke timed out for endpoint "ghost"')
+  })
+
+  it('invoke resolves before timeout when response arrives in time', async () => {
+    ipc.handle('fast', () => 'pong')
+    const promise = ipc.invoke('fast', { timeout: 5000 })
+
+    const sent = JSON.parse(mockTransport.send.mock.calls[0][1])
+    mockTransport.simulateReceive(`${IPC_NAMESPACE}:test:@response`, JSON.stringify({
+      v: PROTOCOL_VERSION,
+      id: sent.id,
+      e: RESPONSE_ENDPOINT,
+      d: { ok: true, data: 'pong' },
+    }))
+
+    await expect(promise).resolves.toBe('pong')
+  })
+
+  it('invoke times out with global default timeout', async () => {
+    const slowIPC = new IPC({ namespace: 'slow', invokeTimeout: 200 })
+    const promise = slowIPC.invoke('ghost')
+    const rejection = promise.catch(e => e)
+    await vi.advanceTimersByTimeAsync(400)
+    const err = await rejection
+    expect(err).toBeInstanceOf(Error)
+    expect(err.message).toBe('Invoke timed out for endpoint "ghost"')
+  })
+
+  it('invoke timeout set to 0 disables timeout', async () => {
+    const noTimeoutIPC = new IPC({ namespace: 'notimeout', invokeTimeout: 0 })
+    const promise = noTimeoutIPC.invoke('ghost')
+    const spy = vi.fn()
+    promise.catch(spy)
+    await vi.advanceTimersByTimeAsync(100_000)
+    expect(spy).not.toHaveBeenCalled()
+  })
 })

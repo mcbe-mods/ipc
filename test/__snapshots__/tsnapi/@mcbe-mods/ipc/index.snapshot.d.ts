@@ -21,6 +21,7 @@ export interface IPCOptions {
   chunkSize?: number;
   compressThreshold?: number;
   maxPacketSize?: number;
+  invokeTimeout?: number;
 }
 export interface IPCSystemEvents {
   [IPC_SYSTEM_EVENTS.ERROR]: Error;
@@ -77,8 +78,8 @@ export declare class IPC {
   on<T>(_: string, _: (_: T) => void): () => void;
   on<T>(_: string, _: Deserializer<T>, _: (_: T) => void): () => void;
   invoke<R = unknown>(_: string): Promise<R>;
-  invoke<T = unknown, R = unknown>(_: string, _: T): Promise<R>;
-  invoke<T = unknown, R = unknown>(_: string, _: Serializer<T>, _: Deserializer<R>, _: T): Promise<R>;
+  invoke<R = unknown>(_: string, _: InvokeOptions<never, R>): Promise<R>;
+  invoke<T = never, R = unknown>(_: string, _: T, _?: InvokeOptions<T, R>): Promise<R>;
   handle<T, R>(_: string, _: (_: T) => R | Promise<R>): () => void;
 }
 export declare class Transport {
