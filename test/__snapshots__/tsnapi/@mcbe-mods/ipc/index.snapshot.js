@@ -31,7 +31,7 @@ export class IPC {
   send(_, _, _) {}
   on(_, _, _) {}
   invoke(_, _, _) {}
-  handle(_, _) {}
+  handle(_, _, _) {}
   invokeImpl(_, _, _) {}
   sendPacket(_, _) {}
   handleReceive(_, _, _) {}

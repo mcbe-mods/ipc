@@ -12,6 +12,24 @@ export interface Deserializer<T> {
   deserialize: (data: string) => T
 }
 
+/** Options for {@link IPC.send} */
+export interface SendOptions<T = never> {
+  /** Custom serializer for the data */
+  serializer?: Serializer<T>
+}
+
+/** Options for {@link IPC.on} */
+export interface OnOptions<T = never> {
+  /** Custom deserializer for received data */
+  deserializer?: Deserializer<T>
+}
+
+/** Options for {@link IPC.handle} */
+export interface HandleOptions<T = never> {
+  /** Custom deserializer for the request data */
+  deserializer?: Deserializer<T>
+}
+
 /**
  * Per-call options for {@link IPC.invoke}.
  * @template T - The request data type

@@ -29,6 +29,18 @@ describe('IPC', () => {
     expect(parsed.data).toEqual({ msg: 'hello' })
   })
 
+  it('sends a signal (no data) via send()', () => {
+    ipc.send('signal')
+
+    expect(mockTransport.send).toHaveBeenCalledTimes(1)
+    const [id, payload] = mockTransport.send.mock.calls[0]
+    expect(id).toBe(`${SYSTEM_DOMAINS.PREFIX}:${SYSTEM_DOMAINS.USER}:test:signal`)
+
+    const parsed = JSON.parse(payload)
+    expect(parsed.channel).toBe('signal')
+    expect(parsed.data).toBeUndefined()
+  })
+
   it('receives a direct packet via on()', () => {
     const handler = vi.fn()
     ipc.on<{ msg: string }>('ping', handler)
@@ -83,6 +95,70 @@ describe('IPC', () => {
 
     const result = await promise
     expect(result).toEqual({ y: '42' })
+  })
+
+  it('invoke without data resolves with handler response', async () => {
+    ipc.handle('ping', () => 'pong')
+
+    const promise = ipc.invoke<string>('ping')
+
+    const sentPayload = mockTransport.send.mock.calls[0][1]
+    const sentPacket = JSON.parse(sentPayload)
+    const responsePacket = JSON.stringify({
+      version: PROTOCOL_VERSION,
+      id: sentPacket.id,
+      channel: SYSTEM_DOMAINS.RESPONSE,
+      data: { ok: true, data: 'pong' },
+    })
+    mockTransport.simulateReceive(`${SYSTEM_DOMAINS.PREFIX}:${SYSTEM_DOMAINS.RESPONSE}:test:${sentPacket.id}`, responsePacket)
+
+    await expect(promise).resolves.toBe('pong')
+  })
+
+  it('invoke with custom deserializer restores response data', async () => {
+    ipc.handle('json', (req: { n: number }) => req)
+
+    const customDeserializer = {
+      deserialize: (s: string) => JSON.parse(s) as { n: number },
+    }
+    const promise = ipc.invoke<{ n: number }, { n: number }>('json', { n: 42 }, { deserializer: customDeserializer })
+
+    const sentPayload = mockTransport.send.mock.calls[0][1]
+    const sentPacket = JSON.parse(sentPayload)
+    const responsePacket = JSON.stringify({
+      version: PROTOCOL_VERSION,
+      id: sentPacket.id,
+      channel: SYSTEM_DOMAINS.RESPONSE,
+      data: { ok: true, data: JSON.stringify({ n: 42 }) },
+    })
+    mockTransport.simulateReceive(`${SYSTEM_DOMAINS.PREFIX}:${SYSTEM_DOMAINS.RESPONSE}:test:${sentPacket.id}`, responsePacket)
+
+    const result = await promise
+    expect(result).toEqual({ n: 42 })
+  })
+
+  it('invoke with custom serializer transforms request data', async () => {
+    ipc.handle('num', (raw: string) => Number.parseInt(raw, 10))
+
+    const customSerializer = {
+      serialize: (v: { value: number }) => String(v.value),
+    }
+    const promise = ipc.invoke<{ value: number }, number>('num', { value: 42 }, { serializer: customSerializer })
+
+    const sentPayload = mockTransport.send.mock.calls[0][1]
+    const sentPacket = JSON.parse(sentPayload)
+    expect(sentPacket.data).toBe('42')
+
+    const responsePacket = JSON.stringify({
+      version: PROTOCOL_VERSION,
+      id: sentPacket.id,
+      channel: SYSTEM_DOMAINS.RESPONSE,
+      data: { ok: true, data: 42 },
+    })
+    mockTransport.simulateReceive(`${SYSTEM_DOMAINS.PREFIX}:${SYSTEM_DOMAINS.RESPONSE}:test:${sentPacket.id}`, responsePacket)
+
+    const result = await promise
+    expect(result).toBe(42)
   })
 
   it('handle sends error response on handler exception', async () => {
@@ -167,7 +243,7 @@ describe('IPC', () => {
     const customSerializer = {
       serialize: (v: number) => `num:${v}`,
     }
-    ipc.send('custom', customSerializer, 42)
+    ipc.send('custom', 42, { serializer: customSerializer })
 
     const payload = mockTransport.send.mock.calls[0][1]
     const parsed = JSON.parse(payload)
@@ -179,7 +255,7 @@ describe('IPC', () => {
       deserialize: (d: string) => Number.parseInt(d.replace('num:', ''), 10),
     }
     const handler = vi.fn()
-    ipc.on('custom', customDeserializer, handler)
+    ipc.on('custom', handler, { deserializer: customDeserializer })
 
     const packet = JSON.stringify({ version: PROTOCOL_VERSION, id: 'X', channel: 'custom', data: 'num:42' })
     mockTransport.simulateReceive(`${SYSTEM_DOMAINS.PREFIX}:${SYSTEM_DOMAINS.USER}:test:custom`, packet)
@@ -199,6 +275,26 @@ describe('IPC', () => {
   it('handle() throws on duplicate channel', () => {
     ipc.handle('dup', () => 'ok')
     expect(() => ipc.handle('dup', () => 'ok')).toThrow('already registered')
+  })
+
+  it('handle() with custom deserializer transforms incoming request data', async () => {
+    const handler = vi.fn((n: number) => n * 2)
+    ipc.handle('double', handler, {
+      deserializer: { deserialize: (s: string) => Number.parseInt(s, 10) },
+    })
+
+    const reqPacket = JSON.stringify({ version: PROTOCOL_VERSION, id: 'REQ1', channel: 'double', data: '21' })
+    mockTransport.simulateReceive(`${SYSTEM_DOMAINS.PREFIX}:${SYSTEM_DOMAINS.USER}:test:double`, reqPacket)
+
+    await vi.runAllTimersAsync()
+
+    expect(handler).toHaveBeenCalledWith(21)
+
+    const lastCall = mockTransport.send.mock.lastCall?.[1]
+    if (lastCall) {
+      const parsed = JSON.parse(lastCall)
+      expect(parsed.data).toEqual({ ok: true, data: 42 })
+    }
   })
 
   it('invoke rejects when no handle is registered', async () => {
