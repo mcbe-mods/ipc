@@ -1,12 +1,13 @@
 import type {
   Chunk,
-  Deserializer,
   ErrorResponseData,
+  HandleOptions,
   InvokeOptions,
   IPCOptions,
+  OnOptions,
   Packet,
   ResponseData,
-  Serializer,
+  SendOptions,
 } from './types'
 
 import { system } from '@minecraft/server'
@@ -45,12 +46,29 @@ const ID_COUNTER_RADIX = 36
 
 let idCounter = 0
 
+/** Generate a short unique identifier for packet correlation (hex random + counter suffix). */
 function generateId(): string {
   const r = ((Math.random() * ID_RANDOM_BITS) >>> 0).toString(16).slice(0, ID_RANDOM_CHARS).toUpperCase()
   const c = (idCounter++ % ID_COUNTER_RADIX).toString(ID_COUNTER_RADIX).toUpperCase()
   return r + c
 }
 
+/**
+ * IPC (Inter-Pack Communication) — message passing between Minecraft Bedrock behavior packs.
+ *
+ * Built on top of `/scriptevent`, supports:
+ * - Fire-and-forget messaging (`send` / `on`)
+ * - Request-response RPC (`invoke` / `handle`)
+ * - Automatic chunking of large payloads
+ * - Optional LZ-String compression
+ *
+ * @example
+ * ```ts
+ * const ipc = new IPC({ namespace: 'myAddon' })
+ * ipc.send('chat', { text: 'hello' })
+ * ipc.on('chat', (msg) => console.log(msg))
+ * ```
+ */
 export class IPC {
   readonly #options: Required<IPCOptions>
   readonly #transport: Transport
@@ -62,6 +80,10 @@ export class IPC {
   readonly #sentIds = new Set<string>()
   #transportUnsubscribe: () => void
 
+  /**
+   * System-level event emitter for internal IPC events.
+   * See {@link IPC_SYSTEM_EVENTS} for available events.
+   */
   readonly events = new EventEmitter<IPCSystemEvents>()
 
   /**
@@ -103,6 +125,7 @@ export class IPC {
    * Use {@link on} on the receiving side to listen for these messages.
    * @param channel - The channel name
    * @param data - The data to send. If using a custom serializer, this is the typed value.
+   * @param options - Optional settings (serializer)
    * @example
    * ```ts
    * ipc.send('notify')
@@ -113,18 +136,18 @@ export class IPC {
    * ```
    * @example
    * ```ts
-   * ipc.send('notify', mySerializer, { message: 'hello' })
+   * ipc.send('notify', { message: 'hello' }, { serializer: mySerializer })
    * ```
    */
   send(channel: string): void
-  send<T>(channel: string, data: NoInfer<T>): void
-  send<T>(channel: string, serializer: Serializer<T>, data: NoInfer<T>): void
-  send<T = never>(channel: string, serializerOrData?: Serializer<T> | T, data?: T): void {
+  send<T>(channel: string, data: T): void
+  send<T>(channel: string, data: T, options: SendOptions<T>): void
+  send<T = never>(channel: string, data?: T, options?: SendOptions<T>): void {
     const id = generateId()
-    const d = data !== undefined
-      ? (serializerOrData as Serializer<T>).serialize(data as T)
-      : (serializerOrData as T)
-    const packet: Packet = { version: PROTOCOL_VERSION, id, channel, data: d }
+    const serialized = options?.serializer && data !== undefined
+      ? options.serializer.serialize(data)
+      : data
+    const packet: Packet = { version: PROTOCOL_VERSION, id, channel, data: serialized }
     this.#sendPacket(SYSTEM_DOMAINS.USER, packet)
   }
 
@@ -134,6 +157,7 @@ export class IPC {
    * Returns an unsubscribe function.
    * @param channel - The channel name to listen on
    * @param handler - Called with the deserialized data each time a message arrives
+   * @param options - Optional settings (deserializer)
    * @returns A function that unsubscribes this listener
    * @example
    * ```ts
@@ -144,34 +168,23 @@ export class IPC {
    * ```
    * @example
    * ```ts
-   * ipc.on('data', myDeserializer, (data) => {
+   * ipc.on('data', (data) => {
    *   console.log(data)
-   * })
+   * }, { deserializer: myDeserializer })
    * ```
    */
   on<T>(channel: string, handler: (data: T) => void): () => void
-  on<T>(channel: string, deserializer: Deserializer<T>, handler: (data: T) => void): () => void
+  on<T>(channel: string, handler: (data: T) => void, options: OnOptions<T>): () => void
   on<T>(
     channel: string,
-    deserializerOrHandler: Deserializer<T> | ((data: T) => void),
-    handler?: (data: T) => void,
+    handler: (data: T) => void,
+    options?: OnOptions<T>,
   ): () => void {
-    let deserializer: Deserializer<T> | undefined
-    let userHandler: (data: T) => void
-
-    if (handler !== undefined) {
-      deserializer = deserializerOrHandler as Deserializer<T>
-      userHandler = handler
-    }
-    else {
-      userHandler = deserializerOrHandler as (data: T) => void
-    }
-
     const wrapped = (raw: unknown): void => {
-      const data = deserializer
-        ? deserializer.deserialize(raw as string)
+      const data = options?.deserializer
+        ? options.deserializer.deserialize(raw as string)
         : (raw as T)
-      userHandler(data)
+      handler(data)
     }
 
     let handlers = this.#onHandlers.get(channel)
@@ -212,7 +225,7 @@ export class IPC {
    * ```
    * @example
    * ```ts
-   * const result = await ipc.invoke('calc', data, { serializer: mySer, deserializer: myDeser })
+   * const result = await ipc.invoke('calc', data, { serializer: mySer, timeout: 5000 })
    * ```
    */
   invoke<R = unknown>(channel: string): Promise<R>
@@ -241,6 +254,7 @@ export class IPC {
    * Only one handler can be registered per channel — duplicate registration throws.
    * @param channel - The channel name to handle
    * @param handler - Called with the deserialized data when an invoke arrives. Return a value or a Promise.
+   * @param options - Optional settings (deserializer)
    * @returns A function that unregisters this handler
    * @throws {Error} If a handler is already registered for this channel
    * @example
@@ -250,16 +264,29 @@ export class IPC {
    * })
    * // later: off()
    * ```
+   * @example
+   * ```ts
+   * ipc.handle('calc', (req) => {
+   *   return req * 2
+   * }, { deserializer: { deserialize: (s: string) => Number(s) } })
+   * ```
    */
+  handle<T, R>(channel: string, handler: (data: T) => R | Promise<R>): () => void
+  handle<T, R>(channel: string, handler: (data: T) => R | Promise<R>, options: HandleOptions<T>): () => void
   handle<T, R>(
     channel: string,
     handler: (data: T) => R | Promise<R>,
+    options?: HandleOptions<T>,
   ): () => void {
     if (this.#handleHandlers.has(channel)) {
       throw new Error(`Handler already registered for channel "${channel}"`)
     }
 
-    this.#handleHandlers.set(channel, handler as (data: unknown) => unknown | Promise<unknown>)
+    const wrapped = options?.deserializer
+      ? (raw: unknown) => handler(options.deserializer!.deserialize(raw as string))
+      : handler
+
+    this.#handleHandlers.set(channel, wrapped as (data: unknown) => unknown | Promise<unknown>)
 
     return () => {
       this.#handleHandlers.delete(channel)
@@ -451,6 +478,7 @@ export class IPC {
   }
 }
 
+/** Type guard: checks whether an unknown value is an {@link InvokeOptions} object. */
 function isInvokeOptions(obj: unknown): obj is InvokeOptions {
   return typeof obj === 'object' && obj !== null
     && ('timeout' in obj || 'serializer' in obj || 'deserializer' in obj)

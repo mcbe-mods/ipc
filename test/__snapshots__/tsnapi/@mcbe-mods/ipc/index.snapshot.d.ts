@@ -16,6 +16,14 @@ export interface ErrorResponseData {
   ok: false;
   err: string;
 }
+export interface HandleOptions<T = never> {
+  deserializer?: Deserializer<T>;
+}
+export interface InvokeOptions<T = never, R = unknown> {
+  timeout?: number;
+  serializer?: Serializer<T>;
+  deserializer?: Deserializer<R>;
+}
 export interface IPCOptions {
   namespace?: string;
   chunkSize?: number;
@@ -29,6 +37,9 @@ export interface IPCSystemEvents {
     payload: string;
   };
 }
+export interface OnOptions<T = never> {
+  deserializer?: Deserializer<T>;
+}
 export interface Packet<T = unknown> {
   version: typeof PROTOCOL_VERSION;
   id: string;
@@ -38,6 +49,9 @@ export interface Packet<T = unknown> {
 export interface ResponseData<T = unknown> {
   ok: true;
   data: T;
+}
+export interface SendOptions<T = never> {
+  serializer?: Serializer<T>;
 }
 export interface Serializer<T> {
   serialize: (_: T) => string;
@@ -73,14 +87,15 @@ export declare class IPC {
   constructor(_?: IPCOptions);
   dispose(): void;
   send(_: string): void;
-  send<T>(_: string, _: NoInfer<T>): void;
-  send<T>(_: string, _: Serializer<T>, _: NoInfer<T>): void;
+  send<T>(_: string, _: T): void;
+  send<T>(_: string, _: T, _: SendOptions<T>): void;
   on<T>(_: string, _: (_: T) => void): () => void;
-  on<T>(_: string, _: Deserializer<T>, _: (_: T) => void): () => void;
+  on<T>(_: string, _: (_: T) => void, _: OnOptions<T>): () => void;
   invoke<R = unknown>(_: string): Promise<R>;
   invoke<R = unknown>(_: string, _: InvokeOptions<never, R>): Promise<R>;
   invoke<T = never, R = unknown>(_: string, _: T, _?: InvokeOptions<T, R>): Promise<R>;
   handle<T, R>(_: string, _: (_: T) => R | Promise<R>): () => void;
+  handle<T, R>(_: string, _: (_: T) => R | Promise<R>, _: HandleOptions<T>): () => void;
 }
 export declare class Transport {
   #private;

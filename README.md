@@ -80,14 +80,20 @@ const mySer: Serializer<MyType> = { serialize: v => JSON.stringify(v) }
 const myDeser: Deserializer<MyType> = { deserialize: s => JSON.parse(s) }
 
 // Fire-and-forget with serializer
-ipc.send('channel', mySer, data)
+ipc.send('channel', data, { serializer: mySer })
 
 // Receive with deserializer
-ipc.on('channel', myDeser, (data) => {
+ipc.on('channel', (data) => {
   // ...
+}, { deserializer: myDeser })
+
+// RPC with serializer via InvokeOptions
+const res = await ipc.invoke('calc', data, {
+  serializer: mySer,
+  timeout: 5000,
 })
 
-// RPC with serializer/deserializer via InvokeOptions
+// RPC with serializer and deserializer via InvokeOptions
 const res = await ipc.invoke('calc', data, {
   serializer: mySer,
   deserializer: myDeser,
