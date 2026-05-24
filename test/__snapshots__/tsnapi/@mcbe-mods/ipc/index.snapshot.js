@@ -33,16 +33,16 @@ export class IPC {
   invoke(_, _, _) {}
   handle(_, _) {}
   invokeImpl(_, _, _) {}
-  sendPacket(_) {}
-  handleReceive(_, _) {}
+  sendPacket(_, _) {}
+  handleReceive(_, _, _) {}
   handleDirectPacket(_) {}
-  handleChunk(_) {}
+  handleChunk(_, _, _) {}
   sendResponse(_, _) {}
 }
 export class Transport {
-  id
+  namespace
   constructor(_) {}
-  send(_, _) {}
+  send(_, _, _) {}
   onReceive(_) {}
 }
 // #endregion

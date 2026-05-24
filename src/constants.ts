@@ -1,13 +1,16 @@
-/** Channels used for internal message routing */
-export const CHANNELS = {
-  /** Base prefix for all ScriptEvent IDs: `ipc:<namespace>:<channel>` */
+/** System domains used for message routing in ScriptEvent IDs: `ipc:<systemDomain>:<namespace>:<route>` */
+export const SYSTEM_DOMAINS = {
+  /** Fixed prefix for all IPC ScriptEvent IDs */
   PREFIX: 'ipc',
-  /** Internal response routing channel for invoke/handle */
-  RESPONSE: '@response',
+  /** User-facing domain — send/on/invoke/handle messages */
+  USER: 'user',
+  /** Internal domain — invoke response routing */
+  RESPONSE: 'response',
 } as const
 
-/** Event emitter prefix for matching invoke requests to their responses */
-export const RESPONSE_EVENT_PREFIX = 'invoke-response:'
+export const EVENTS = {
+  INVOKE_RESPONSE: 'invoke-response',
+} as const
 
 /** Current IPC protocol version */
 export const PROTOCOL_VERSION = 1 as const

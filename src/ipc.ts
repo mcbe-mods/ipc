@@ -13,7 +13,7 @@ import { system } from '@minecraft/server'
 import { EventEmitter } from 'mini-emit'
 import { Chunker } from './chunk'
 import { Compressor } from './compress'
-import { CHANNELS, PROTOCOL_VERSION, RESPONSE_EVENT_PREFIX } from './constants'
+import { EVENTS, PROTOCOL_VERSION, SYSTEM_DOMAINS } from './constants'
 import { Transport } from './transport'
 
 const DEFAULT_OPTIONS: Required<IPCOptions> = {
@@ -75,9 +75,9 @@ export class IPC {
     this.#compressor = new Compressor(this.#options.compressThreshold)
     this.#chunker = new Chunker(this.#options.chunkSize)
 
-    this.#transportUnsubscribe = this.#transport.onReceive((channel, payload) => {
+    this.#transportUnsubscribe = this.#transport.onReceive((systemDomain, route, payload) => {
       try {
-        this.#handleReceive(channel, payload)
+        this.#handleReceive(systemDomain, route, payload)
       }
       catch (e) {
         this.events.emit(IPC_SYSTEM_EVENTS.ERROR, e as Error)
@@ -125,7 +125,7 @@ export class IPC {
       ? (serializerOrData as Serializer<T>).serialize(data as T)
       : (serializerOrData as T)
     const packet: Packet = { version: PROTOCOL_VERSION, id, channel, data: d }
-    this.#sendPacket(packet)
+    this.#sendPacket(SYSTEM_DOMAINS.USER, packet)
   }
 
   /**
@@ -290,7 +290,7 @@ export class IPC {
 
       this.#sentIds.add(id)
 
-      this.#responses.once(`${RESPONSE_EVENT_PREFIX}${id}`, (response: unknown) => {
+      this.#responses.once(`${EVENTS.INVOKE_RESPONSE}:${id}`, (response: unknown) => {
         cleanup()
         this.#sentIds.delete(id)
         const resp = response as ResponseData<R> | ErrorResponseData
@@ -316,11 +316,11 @@ export class IPC {
         }, ticks)
       }
 
-      this.#sendPacket(packet)
+      this.#sendPacket(SYSTEM_DOMAINS.USER, packet)
     })
   }
 
-  #sendPacket(packet: Packet): void {
+  #sendPacket(systemDomain: string, packet: Packet): void {
     const raw = JSON.stringify(packet)
 
     if (raw.length > this.#options.maxPacketSize) {
@@ -330,22 +330,36 @@ export class IPC {
     }
 
     const { value, compressed } = this.#compressor.compress(raw)
+    const route = systemDomain === SYSTEM_DOMAINS.USER ? packet.channel : packet.id
 
     if (value.length <= this.#options.chunkSize && !compressed) {
-      this.#transport.send(packet.channel, value)
+      this.#transport.send(systemDomain, route, value)
       return
     }
 
     const chunks = this.#chunker.split(packet.id, value, compressed)
     for (const chunk of chunks) {
-      this.#transport.send(packet.channel, JSON.stringify(chunk))
+      this.#transport.send(systemDomain, route, JSON.stringify(chunk))
     }
   }
 
-  #handleReceive(channel: string, payload: string): void {
-    if (channel !== CHANNELS.RESPONSE
-      && !this.#onHandlers.has(channel)
-      && !this.#handleHandlers.has(channel)) {
+  #handleReceive(systemDomain: string, route: string, payload: string): void {
+    if (systemDomain === SYSTEM_DOMAINS.RESPONSE) {
+      const parsed = JSON.parse(payload) as Packet | Chunk
+      if ('version' in parsed) {
+        this.#responses.emit(`${EVENTS.INVOKE_RESPONSE}:${route}`, (parsed as Packet).data)
+      }
+      else if ('seq' in parsed) {
+        this.#handleChunk(parsed as Chunk, systemDomain, route)
+      }
+      return
+    }
+
+    if (systemDomain !== SYSTEM_DOMAINS.USER) {
+      return
+    }
+
+    if (!this.#onHandlers.has(route) && !this.#handleHandlers.has(route)) {
       return
     }
 
@@ -355,7 +369,7 @@ export class IPC {
       this.#handleDirectPacket(parsed as Packet)
     }
     else if ('seq' in parsed) {
-      this.#handleChunk(parsed as Chunk)
+      this.#handleChunk(parsed as Chunk, systemDomain, route)
     }
     else {
       this.events.emit(IPC_SYSTEM_EVENTS.INVALID_PACKET, { payload })
@@ -364,12 +378,6 @@ export class IPC {
 
   #handleDirectPacket(packet: Packet): void {
     const { channel, data, id } = packet
-
-    // Response from an invoke — resolve/reject the pending promise by id
-    if (channel === CHANNELS.RESPONSE) {
-      this.#responses.emit(`${RESPONSE_EVENT_PREFIX}${id}`, data)
-      return
-    }
 
     // Packet was sent by this instance itself (loopback via ScriptEvent)
     // Must check before handleHandler to prevent self-invocation of handle()
@@ -410,7 +418,7 @@ export class IPC {
     this.#sendResponse(id, { ok: false, err: `No handler registered for "${channel}"` })
   }
 
-  #handleChunk(chunk: Chunk): void {
+  #handleChunk(chunk: Chunk, systemDomain: string, route: string): void {
     const result = this.#chunker.assemble(chunk)
 
     if (result.done) {
@@ -423,7 +431,12 @@ export class IPC {
         this.events.emit(IPC_SYSTEM_EVENTS.ERROR, new Error(`Failed to parse reassembled packet for chunk ${chunk.id}`))
         return
       }
-      this.#handleDirectPacket(packet)
+      if (systemDomain === SYSTEM_DOMAINS.RESPONSE) {
+        this.#responses.emit(`${EVENTS.INVOKE_RESPONSE}:${route}`, packet.data)
+      }
+      else {
+        this.#handleDirectPacket(packet)
+      }
     }
   }
 
@@ -431,10 +444,10 @@ export class IPC {
     const packet: Packet = {
       version: PROTOCOL_VERSION,
       id,
-      channel: CHANNELS.RESPONSE,
+      channel: SYSTEM_DOMAINS.RESPONSE,
       data,
     }
-    this.#sendPacket(packet)
+    this.#sendPacket(SYSTEM_DOMAINS.RESPONSE, packet)
   }
 }
 
