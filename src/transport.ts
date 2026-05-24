@@ -5,42 +5,61 @@
  *
  * **Limit**: The underlying `/scriptevent` command accepts at most **2048 bytes** per message.
  * @see https://learn.microsoft.com/en-us/minecraft/creator/reference/content/commandsreference/examples/commands/scriptevent?view=minecraft-bedrock-stable#usage
+ *
+ * **Event ID format**: `ipc:<systemDomain>:<namespace>:<route>`
+ * - systemDomain: system domain for routing (user, response, etc.)
+ * - namespace: user-configured namespace, validated against injection
+ * - route: channel name (user domain) or invoke id (response domain)
  */
 import { ScriptEventSource, system } from '@minecraft/server'
-import { CHANNELS } from './constants'
+import { SYSTEM_DOMAINS } from './constants'
 
 export class Transport {
-  readonly #id: string
+  readonly #namespace: string
 
   constructor(namespace: string) {
-    this.#id = `${CHANNELS.PREFIX}:${namespace}`
+    this.#namespace = namespace
   }
 
   /**
-   * Broadcast a raw string payload to all addons listening on the same namespace and channel.
-   * @param channel - The channel name to send on (appended to event ID for fast routing)
-   * @param payload - The raw string to send (usually a serialized packet)
+   * Broadcast a raw string payload to all addons listening on the same namespace and system domain.
+   * @param systemDomain - The system domain (user, response, etc.)
+   * @param route - The route within the domain (channel name or invoke id)
+   * @param payload - The raw string to send
    */
-  send(channel: string, payload: string): void {
-    system.sendScriptEvent(`${this.#id}:${channel}`, payload)
+  send(systemDomain: string, route: string, payload: string): void {
+    system.sendScriptEvent(`${SYSTEM_DOMAINS.PREFIX}:${systemDomain}:${this.#namespace}:${route}`, payload)
   }
 
   /**
    * Subscribe to incoming messages from other addons.
-   * @param handler - Called with each incoming message, pre-routed by channel
+   * @param handler - Called with (systemDomain, route, payload) for each matching message
    * @returns A function that unsubscribes this handler
    */
-  onReceive(handler: (channel: string, payload: string) => void): () => void {
-    const prefix = `${this.#id}:`
+  onReceive(handler: (systemDomain: string, route: string, payload: string) => void): () => void {
+    const basePrefix = `${SYSTEM_DOMAINS.PREFIX}:`
+    const nsPrefix = `${this.#namespace}:`
+
     const callback = (event: { id: string, message: string, sourceType: ScriptEventSource }): void => {
       if (event.sourceType !== ScriptEventSource.Server) {
         return
       }
-      if (!event.id.startsWith(prefix)) {
+      if (!event.id.startsWith(basePrefix)) {
         return
       }
-      const channel = event.id.slice(prefix.length)
-      handler(channel, event.message)
+      const suffix = event.id.slice(basePrefix.length)
+      const firstColon = suffix.indexOf(':')
+      if (firstColon < 0) {
+        return
+      }
+      const systemDomain = suffix.slice(0, firstColon)
+      const nsAndRoute = suffix.slice(firstColon + 1)
+
+      if (!nsAndRoute.startsWith(nsPrefix)) {
+        return
+      }
+      const route = nsAndRoute.slice(nsPrefix.length)
+      handler(systemDomain, route, event.message)
     }
 
     system.afterEvents.scriptEventReceive.subscribe(callback)

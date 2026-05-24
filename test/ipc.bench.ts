@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { bench, describe } from 'vitest'
-import { CHANNELS, PROTOCOL_VERSION } from '../src/constants'
+import { PROTOCOL_VERSION, SYSTEM_DOMAINS } from '../src/constants'
 import { IPC } from '../src/ipc'
 import { mockTransport } from './setup'
 
@@ -36,7 +36,7 @@ describe('IPC.send + on — full fire-and-forget cycle', () => {
     mockTransport.send.mockClear()
     ipc.send('e', SMALL)
     const payload = mockTransport.send.mock.calls[0][1]
-    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:cycle:e`, payload)
+    mockTransport.simulateReceive(`${SYSTEM_DOMAINS.PREFIX}:${SYSTEM_DOMAINS.USER}:cycle:e`, payload)
   })
 
   bench('large — send (chunked) then simulate all chunks', () => {
@@ -44,7 +44,7 @@ describe('IPC.send + on — full fire-and-forget cycle', () => {
     ipc.send('e', LARGE)
     const calls = mockTransport.send.mock.calls
     for (const [, payload] of calls) {
-      mockTransport.simulateReceive(`${CHANNELS.PREFIX}:cycle:e`, payload)
+      mockTransport.simulateReceive(`${SYSTEM_DOMAINS.PREFIX}:${SYSTEM_DOMAINS.USER}:cycle:e`, payload)
     }
   })
 })
@@ -61,8 +61,8 @@ describe('IPC.invoke + handle — RPC round-trip', () => {
     mockTransport.send.mockClear()
     const p = ipc.invoke<string, string>('echo', SMALL)
     const id = invokeId(mockTransport.send.mock.calls[0][1])
-    const resp = JSON.stringify({ version: PROTOCOL_VERSION, id, channel: CHANNELS.RESPONSE, data: { ok: true, data: SMALL } })
-    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:rpc:@response`, resp)
+    const resp = JSON.stringify({ version: PROTOCOL_VERSION, id, channel: SYSTEM_DOMAINS.RESPONSE, data: { ok: true, data: SMALL } })
+    mockTransport.simulateReceive(`${SYSTEM_DOMAINS.PREFIX}:${SYSTEM_DOMAINS.RESPONSE}:rpc:${id}`, resp)
     await p
   })
 
@@ -70,8 +70,8 @@ describe('IPC.invoke + handle — RPC round-trip', () => {
     mockTransport.send.mockClear()
     const p = ipc.invoke<string, string>('echo', MEDIUM)
     const id = invokeId(mockTransport.send.mock.calls[0][1])
-    const resp = JSON.stringify({ version: PROTOCOL_VERSION, id, channel: CHANNELS.RESPONSE, data: { ok: true, data: MEDIUM } })
-    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:rpc:@response`, resp)
+    const resp = JSON.stringify({ version: PROTOCOL_VERSION, id, channel: SYSTEM_DOMAINS.RESPONSE, data: { ok: true, data: MEDIUM } })
+    mockTransport.simulateReceive(`${SYSTEM_DOMAINS.PREFIX}:${SYSTEM_DOMAINS.RESPONSE}:rpc:${id}`, resp)
     await p
   })
 
@@ -79,8 +79,8 @@ describe('IPC.invoke + handle — RPC round-trip', () => {
     mockTransport.send.mockClear()
     const p = ipc.invoke<string, string>('echo', LARGE)
     const id = invokeId(mockTransport.send.mock.calls[0][1])
-    const resp = JSON.stringify({ version: PROTOCOL_VERSION, id, channel: CHANNELS.RESPONSE, data: { ok: true, data: LARGE } })
-    mockTransport.simulateReceive(`${CHANNELS.PREFIX}:rpc:@response`, resp)
+    const resp = JSON.stringify({ version: PROTOCOL_VERSION, id, channel: SYSTEM_DOMAINS.RESPONSE, data: { ok: true, data: LARGE } })
+    mockTransport.simulateReceive(`${SYSTEM_DOMAINS.PREFIX}:${SYSTEM_DOMAINS.RESPONSE}:rpc:${id}`, resp)
     await p
   })
 })
