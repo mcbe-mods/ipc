@@ -24,18 +24,18 @@ export interface InvokeOptions<T = never, R = unknown> {
   serializer?: Serializer<T>;
   deserializer?: Deserializer<R>;
 }
+export interface IPCEvents {
+  [EVENTS.ERROR]: Error;
+  [EVENTS.INVALID_PACKET]: {
+    payload: string;
+  };
+}
 export interface IPCOptions {
   namespace?: string;
   chunkSize?: number;
   compressThreshold?: number;
   maxPacketSize?: number;
   invokeTimeout?: number;
-}
-export interface IPCSystemEvents {
-  [IPC_SYSTEM_EVENTS.ERROR]: Error;
-  [IPC_SYSTEM_EVENTS.INVALID_PACKET]: {
-    payload: string;
-  };
 }
 export interface OnOptions<T = never> {
   deserializer?: Deserializer<T>;
@@ -83,7 +83,7 @@ export declare class Compressor {
 }
 export declare class IPC {
   #private;
-  readonly events: EventEmitter<IPCSystemEvents>;
+  readonly events: EventEmitter<IPCEvents>;
   constructor(_?: IPCOptions);
   dispose(): void;
   send(_: string): void;
@@ -106,7 +106,7 @@ export declare class Transport {
 // #endregion
 
 // #region Variables
-export declare const IPC_SYSTEM_EVENTS: {
+export declare const EVENTS: {
   readonly ERROR: "error";
   readonly INVALID_PACKET: "invalid-packet";
 };

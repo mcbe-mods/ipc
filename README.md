@@ -18,7 +18,7 @@ npm install @mcbe-mods/ipc
 ## Usage
 
 ```ts
-import { IPC, IPC_SYSTEM_EVENTS } from '@mcbe-mods/ipc'
+import { EVENTS, IPC } from '@mcbe-mods/ipc'
 
 const ipc = new IPC({ namespace: 'myAddon' })
 // scriptEvent ID → ipc:myAddon
@@ -143,14 +143,14 @@ interface IPCOptions {
 
 ## Events
 
-System-level events emitted by `ipc.events` — listen with type safety via `IPC_SYSTEM_EVENTS`:
+System-level events emitted by `ipc.events` — listen with type safety via `EVENTS`:
 
 ```ts
-ipc.events.on(IPC_SYSTEM_EVENTS.ERROR, (err) => {
+ipc.events.on(EVENTS.ERROR, (err) => {
   console.error('IPC error:', err.message)
 })
 
-ipc.events.on(IPC_SYSTEM_EVENTS.INVALID_PACKET, ({ payload }) => {
+ipc.events.on(EVENTS.INVALID_PACKET, ({ payload }) => {
   console.warn('Received unrecognized payload:', payload)
 })
 ```

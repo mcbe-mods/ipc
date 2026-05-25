@@ -8,9 +8,5 @@ export const SYSTEM_DOMAINS = {
   RESPONSE: 'response',
 } as const
 
-export const EVENTS = {
-  INVOKE_RESPONSE: 'invoke-response',
-} as const
-
 /** Current IPC protocol version */
 export const PROTOCOL_VERSION = 1 as const

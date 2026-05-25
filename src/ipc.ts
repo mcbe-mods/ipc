@@ -1,3 +1,5 @@
+import type { IPCEvents } from './events'
+
 import type {
   Chunk,
   ErrorResponseData,
@@ -9,13 +11,14 @@ import type {
   ResponseData,
   SendOptions,
 } from './types'
-
 import { system } from '@minecraft/server'
 import { EventEmitter } from 'mini-emit'
 import { Chunker } from './chunk'
 import { Compressor } from './compress'
-import { EVENTS, PROTOCOL_VERSION, SYSTEM_DOMAINS } from './constants'
+import { PROTOCOL_VERSION, SYSTEM_DOMAINS } from './constants'
+import { EVENTS, SYSTEM_EVENTS } from './events'
 import { Transport } from './transport'
+import { generateId, isInvokeOptions } from './utils'
 
 const DEFAULT_OPTIONS: Required<IPCOptions> = {
   namespace: 'global',
@@ -23,34 +26,6 @@ const DEFAULT_OPTIONS: Required<IPCOptions> = {
   compressThreshold: 800,
   maxPacketSize: 1_000_000,
   invokeTimeout: 30_000,
-}
-
-/**
- * Events emitted by {@link IPC.events}.
- * - `error`: An internal error occurred (e.g., malformed chunk reassembly).
- * - `invalid-packet`: A received payload could not be parsed as a valid packet.
- */
-export const IPC_SYSTEM_EVENTS = {
-  ERROR: 'error',
-  INVALID_PACKET: 'invalid-packet',
-} as const
-
-export interface IPCSystemEvents {
-  [IPC_SYSTEM_EVENTS.ERROR]: Error
-  [IPC_SYSTEM_EVENTS.INVALID_PACKET]: { payload: string }
-}
-
-const ID_RANDOM_BITS = 0x100000000
-const ID_RANDOM_CHARS = 6
-const ID_COUNTER_RADIX = 36
-
-let idCounter = 0
-
-/** Generate a short unique identifier for packet correlation (hex random + counter suffix). */
-function generateId(): string {
-  const r = ((Math.random() * ID_RANDOM_BITS) >>> 0).toString(16).slice(0, ID_RANDOM_CHARS).toUpperCase()
-  const c = (idCounter++ % ID_COUNTER_RADIX).toString(ID_COUNTER_RADIX).toUpperCase()
-  return r + c
 }
 
 /**
@@ -82,9 +57,9 @@ export class IPC {
 
   /**
    * System-level event emitter for internal IPC events.
-   * See {@link IPC_SYSTEM_EVENTS} for available events.
+   * See {@link EVENTS} for available events.
    */
-  readonly events = new EventEmitter<IPCSystemEvents>()
+  readonly events = new EventEmitter<IPCEvents>()
 
   /**
    * Creates an IPC instance bound to the given namespace.
@@ -102,7 +77,7 @@ export class IPC {
         this.#handleReceive(systemDomain, route, payload)
       }
       catch (e) {
-        this.events.emit(IPC_SYSTEM_EVENTS.ERROR, e as Error)
+        this.events.emit(EVENTS.ERROR, e as Error)
       }
     })
   }
@@ -317,7 +292,7 @@ export class IPC {
 
       this.#sentIds.add(id)
 
-      this.#responses.once(`${EVENTS.INVOKE_RESPONSE}:${id}`, (response: unknown) => {
+      this.#responses.once(`${SYSTEM_EVENTS.INVOKE_RESPONSE}:${id}`, (response: unknown) => {
         cleanup()
         this.#sentIds.delete(id)
         const resp = response as ResponseData<R> | ErrorResponseData
@@ -374,7 +349,7 @@ export class IPC {
     if (systemDomain === SYSTEM_DOMAINS.RESPONSE) {
       const parsed = JSON.parse(payload) as Packet | Chunk
       if ('version' in parsed) {
-        this.#responses.emit(`${EVENTS.INVOKE_RESPONSE}:${route}`, (parsed as Packet).data)
+        this.#responses.emit(`${SYSTEM_EVENTS.INVOKE_RESPONSE}:${route}`, (parsed as Packet).data)
       }
       else if ('seq' in parsed) {
         this.#handleChunk(parsed as Chunk, systemDomain, route)
@@ -399,7 +374,7 @@ export class IPC {
       this.#handleChunk(parsed as Chunk, systemDomain, route)
     }
     else {
-      this.events.emit(IPC_SYSTEM_EVENTS.INVALID_PACKET, { payload })
+      this.events.emit(EVENTS.INVALID_PACKET, { payload })
     }
   }
 
@@ -435,7 +410,7 @@ export class IPC {
           handler(data)
         }
         catch (e) {
-          this.events.emit(IPC_SYSTEM_EVENTS.ERROR, e as Error)
+          this.events.emit(EVENTS.ERROR, e as Error)
         }
       }
       return
@@ -455,11 +430,11 @@ export class IPC {
         packet = JSON.parse(raw) as Packet
       }
       catch {
-        this.events.emit(IPC_SYSTEM_EVENTS.ERROR, new Error(`Failed to parse reassembled packet for chunk ${chunk.id}`))
+        this.events.emit(EVENTS.ERROR, new Error(`Failed to parse reassembled packet for chunk ${chunk.id}`))
         return
       }
       if (systemDomain === SYSTEM_DOMAINS.RESPONSE) {
-        this.#responses.emit(`${EVENTS.INVOKE_RESPONSE}:${route}`, packet.data)
+        this.#responses.emit(`${SYSTEM_EVENTS.INVOKE_RESPONSE}:${route}`, packet.data)
       }
       else {
         this.#handleDirectPacket(packet)
@@ -476,10 +451,4 @@ export class IPC {
     }
     this.#sendPacket(SYSTEM_DOMAINS.RESPONSE, packet)
   }
-}
-
-/** Type guard: checks whether an unknown value is an {@link InvokeOptions} object. */
-function isInvokeOptions(obj: unknown): obj is InvokeOptions {
-  return typeof obj === 'object' && obj !== null
-    && ('timeout' in obj || 'serializer' in obj || 'deserializer' in obj)
 }
