@@ -119,6 +119,7 @@ export class IPC {
   send<T>(channel: string, data: T, options: SendOptions<T>): void
   send<T = never>(channel: string, data?: T, options?: SendOptions<T>): void {
     const id = generateId()
+    this.#sentIds.add(id)
     const serialized = options?.serializer && data !== undefined
       ? options.serializer.serialize(data)
       : data

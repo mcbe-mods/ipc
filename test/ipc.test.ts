@@ -354,6 +354,23 @@ describe('IPC', () => {
     }
   })
 
+  it('ignores self-sent send packet on loopback', () => {
+    const handler = vi.fn()
+    ipc.on('ping', handler)
+
+    ipc.send('ping', { msg: 'hello' })
+
+    const sentPayload = mockTransport.send.mock.calls[0][1]
+    const sentPacket = JSON.parse(sentPayload)
+
+    mockTransport.simulateReceive(
+      `${SYSTEM_DOMAINS.PREFIX}:${SYSTEM_DOMAINS.USER}:test:ping`,
+      JSON.stringify(sentPacket),
+    )
+
+    expect(handler).not.toHaveBeenCalled()
+  })
+
   it('ignores self-sent invoke packet on loopback', async () => {
     ipc.handle('echo', (data: string) => `echo:${data}`)
 
