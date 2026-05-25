@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PROTOCOL_VERSION, SYSTEM_DOMAINS } from '../src/constants'
-import { IPC, IPC_SYSTEM_EVENTS } from '../src/ipc'
+import { EVENTS } from '../src/events'
+import { IPC } from '../src/ipc'
 import { mockTransport } from './setup'
 
 describe('IPC', () => {
@@ -230,7 +231,7 @@ describe('IPC', () => {
 
   it('emits error on malformed chunk reassembly', () => {
     const errorHandler = vi.fn()
-    ipc.events.on('error', errorHandler)
+    ipc.events.on(EVENTS.ERROR, errorHandler)
     ipc.on('dummy', () => {}) // register listener so pre-filter passes
 
     const chunk = JSON.stringify({ id: 'BADID', seq: 0, total: 1, data: 'not-json!!' })
@@ -412,7 +413,7 @@ describe('IPC', () => {
 
   it('emits invalid-packet event for unrecognized payloads', () => {
     const handler = vi.fn()
-    ipc.events.on(IPC_SYSTEM_EVENTS.INVALID_PACKET, handler)
+    ipc.events.on(EVENTS.INVALID_PACKET, handler)
     ipc.on('dummy', () => {}) // register listener so pre-filter passes
 
     mockTransport.simulateReceive(`${SYSTEM_DOMAINS.PREFIX}:${SYSTEM_DOMAINS.USER}:test:dummy`, JSON.stringify({ foo: 'bar' }))

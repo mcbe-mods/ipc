@@ -48,6 +48,6 @@ export class Transport {
 // #endregion
 
 // #region Variables
-export var IPC_SYSTEM_EVENTS /* const */
+export var EVENTS /* const */
 export var PROTOCOL_VERSION /* const */
 // #endregion
