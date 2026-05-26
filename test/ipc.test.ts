@@ -440,7 +440,7 @@ describe('IPC', () => {
   })
 
   it('invoke times out with per-call timeout', async () => {
-    const promise = ipc.invoke('ghost', { timeout: 100 })
+    const promise = ipc.invoke('ghost', undefined, { timeout: 100 })
     const rejection = promise.catch(e => e)
     await vi.advanceTimersByTimeAsync(200)
     const err = await rejection
@@ -449,7 +449,7 @@ describe('IPC', () => {
 
   it('invoke resolves before timeout when response arrives in time', async () => {
     ipc.handle('fast', () => 'pong')
-    const promise = ipc.invoke('fast', { timeout: 5000 })
+    const promise = ipc.invoke('fast', undefined, { timeout: 5000 })
 
     const sent = JSON.parse(mockTransport.send.mock.calls[0][1])
     mockTransport.simulateReceive(`${SYSTEM_DOMAINS.PREFIX}:${SYSTEM_DOMAINS.RESPONSE}:test:${sent.id}`, JSON.stringify({

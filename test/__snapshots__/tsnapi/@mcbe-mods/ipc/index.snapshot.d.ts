@@ -36,6 +36,7 @@ export interface IPCOptions {
   compressThreshold?: number;
   maxPacketSize?: number;
   invokeTimeout?: number;
+  chunkTimeout?: number;
 }
 export interface OnOptions<T = never> {
   deserializer?: Deserializer<T>;
@@ -63,7 +64,7 @@ export declare class Chunker {
   #private;
   constructor(_: number);
   split(_: string, _: string, _: boolean): Chunk[];
-  assemble(_: Chunk): {
+  assemble(_: Chunk, _?: number): {
     done: false;
   } | {
     done: true;

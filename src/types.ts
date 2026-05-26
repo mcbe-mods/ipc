@@ -66,6 +66,11 @@ export interface IPCOptions {
   maxPacketSize?: number
   /** Default timeout for {@link IPC.invoke} in milliseconds. 0 disables timeout. @default 30_000 */
   invokeTimeout?: number
+  /**
+   * Maximum time (ms) a partially-assembled chunked packet is kept in the buffer
+   * before being discarded. 0 disables timeout. @default 30_000
+   */
+  chunkTimeout?: number
 }
 
 /**
