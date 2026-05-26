@@ -26,6 +26,7 @@ const DEFAULT_OPTIONS: Required<IPCOptions> = {
   compressThreshold: 800,
   maxPacketSize: 1_000_000,
   invokeTimeout: 30_000,
+  chunkTimeout: 30_000,
 }
 
 /**
@@ -213,7 +214,7 @@ export class IPC {
     options?: InvokeOptions<T, R>,
   ): Promise<R> {
     if (dataOrOptions === undefined) {
-      return this.#invokeImpl(channel)
+      return this.#invokeImpl(channel, undefined, options)
     }
 
     if (isInvokeOptions(dataOrOptions)) {
@@ -350,7 +351,10 @@ export class IPC {
     if (systemDomain === SYSTEM_DOMAINS.RESPONSE) {
       const parsed = JSON.parse(payload) as Packet | Chunk
       if ('version' in parsed) {
-        this.#responses.emit(`${SYSTEM_EVENTS.INVOKE_RESPONSE}:${route}`, (parsed as Packet).data)
+        const packet = parsed as Packet
+        if (!this.#checkVersion(packet))
+          return
+        this.#responses.emit(`${SYSTEM_EVENTS.INVOKE_RESPONSE}:${route}`, packet.data)
       }
       else if ('seq' in parsed) {
         this.#handleChunk(parsed as Chunk, systemDomain, route)
@@ -379,7 +383,20 @@ export class IPC {
     }
   }
 
+  #checkVersion(packet: Packet): boolean {
+    if (packet.version !== PROTOCOL_VERSION) {
+      this.events.emit(EVENTS.ERROR, new Error(
+        `Protocol version mismatch: expected ${PROTOCOL_VERSION}, got ${packet.version} [channel: ${packet.channel}]`,
+      ))
+      return false
+    }
+    return true
+  }
+
   #handleDirectPacket(packet: Packet): void {
+    if (!this.#checkVersion(packet))
+      return
+
     const { channel, data, id } = packet
 
     // Packet was sent by this instance itself (loopback via ScriptEvent)
@@ -422,7 +439,7 @@ export class IPC {
   }
 
   #handleChunk(chunk: Chunk, systemDomain: string, route: string): void {
-    const result = this.#chunker.assemble(chunk)
+    const result = this.#chunker.assemble(chunk, this.#options.chunkTimeout)
 
     if (result.done) {
       const raw = this.#compressor.decompress(result.data, result.compressed)
@@ -435,6 +452,8 @@ export class IPC {
         return
       }
       if (systemDomain === SYSTEM_DOMAINS.RESPONSE) {
+        if (!this.#checkVersion(packet))
+          return
         this.#responses.emit(`${SYSTEM_EVENTS.INVOKE_RESPONSE}:${route}`, packet.data)
       }
       else {

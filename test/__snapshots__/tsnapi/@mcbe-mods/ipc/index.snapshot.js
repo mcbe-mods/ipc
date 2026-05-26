@@ -7,7 +7,7 @@ export class Chunker {
   buffer
   constructor(_) {}
   split(_, _, _) {}
-  assemble(_) {}
+  assemble(_, _) {}
   get pendingCount() {}
 }
 export class Compressor {
@@ -35,6 +35,7 @@ export class IPC {
   invokeImpl(_, _, _) {}
   sendPacket(_, _) {}
   handleReceive(_, _, _) {}
+  checkVersion(_) {}
   handleDirectPacket(_) {}
   handleChunk(_, _, _) {}
   sendResponse(_, _) {}

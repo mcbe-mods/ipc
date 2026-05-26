@@ -138,6 +138,12 @@ interface IPCOptions {
    * @default 30_000
    */
   invokeTimeout?: number
+  /**
+   * Max time (ms) a partially-assembled chunked packet is kept
+   * in the buffer. 0 disables timeout.
+   * @default 30_000
+   */
+  chunkTimeout?: number
 }
 ```
 

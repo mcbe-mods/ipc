@@ -5,6 +5,7 @@ interface PendingPacket {
   received: number
   total: number
   compressed: boolean
+  timestamp: number
 }
 
 /**
@@ -53,12 +54,23 @@ export class Chunker {
    * Feed a received chunk to the reassembly buffer.
    * Returns `{ done: true }` with the full data once all fragments have arrived.
    * @param chunk - The incoming chunk fragment
+   * @param maxAge - Discard pending packets older than this many ms (0 = no timeout)
    */
   assemble(
     chunk: Chunk,
+    maxAge = 0,
   ): { done: false } | { done: true, data: string, compressed: boolean } {
     if (chunk.total <= 0) {
       return { done: false }
+    }
+
+    if (maxAge > 0) {
+      const cutoff = Date.now() - maxAge
+      for (const [key, p] of this.#buffer) {
+        if (p.timestamp < cutoff) {
+          this.#buffer.delete(key)
+        }
+      }
     }
 
     let pending = this.#buffer.get(chunk.id)
@@ -69,6 +81,7 @@ export class Chunker {
         received: 0,
         total: chunk.total,
         compressed: chunk.compressed === true,
+        timestamp: Date.now(),
       }
       this.#buffer.set(chunk.id, pending)
     }
